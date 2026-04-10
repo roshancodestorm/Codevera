@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JARVIS-X | AI Chatbot</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a; /* Tailwind slate-900 */
+            color: #f8fafc; /* Tailwind slate-50 */
+        }
+        
+        /* Glassmorphism styling */
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7); /* Tailwind slate-800 */
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Message animations */
+        @keyframes slideInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .animate-message {
+            animation: slideInUp 0.3s ease-out forwards;
+        }
+
+        /* Custom Scrollbar for chat container */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background-color: rgba(148, 163, 184, 0.3);
+            border-radius: 10px;
+        }
+
+        /* Typing indicator animation */
+        .typing-dot {
+            animation: typing 1.4s infinite ease-in-out both;
+        }
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+        
+        @keyframes typing {
+            0%, 80%, 100% { transform: scale(0); opacity: 0.5; }
+            40% { transform: scale(1); opacity: 1; }
+        }
+    </style>
+</head>
+<body class="h-screen w-screen overflow-hidden flex flex-col items-center justify-center p-4 sm:p-6 relative">
+    
+    <!-- Background Design -->
+    <div class="absolute inset-0 z-0 overflow-hidden pointer-events-none">
+        <div class="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-blue-600/20 blur-[120px]"></div>
+        <div class="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-cyan-600/20 blur-[120px]"></div>
+    </div>
+
+    <!-- API Key Input Modal (Shows first) -->
+    <div id="apiKeyModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm transition-opacity duration-300">
+        <div class="glass-panel w-11/12 max-w-md rounded-2xl p-6 transform transition-all duration-300 scale-100">
+            <h2 class="text-xl font-bold mb-2 flex items-center gap-2 text-cyan-400">
+                <i class="fa-solid fa-microchip"></i> System Initialization
+            </h2>
+            <p class="text-sm text-slate-300 mb-6 font-light leading-relaxed">
+                Welcome to JARVIS-X. To connect to the neural network and activate Chat capabilities, please provide your OpenAI API Key.
+            </p>
+            <div class="flex flex-col gap-3">
+                <input type="password" id="apiKeyInput" placeholder="sk-..." class="w-full bg-slate-900/50 border border-slate-600 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 transition-colors">
+                <p class="text-xs text-slate-400"><i class="fa-solid fa-lock text-slate-500 mr-1"></i> Key is stored locally in your browser memory.</p>
+                <button onclick="initializeSystem()" class="mt-2 w-full bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-medium rounded-lg px-4 py-3 transition-all duration-300 shadow-lg shadow-cyan-900/30">
+                    Initialize Core
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Chat Interface -->
+    <main class="glass-panel z-10 w-full max-w-4xl h-full max-h-[850px] rounded-2xl flex flex-col overflow-hidden shadow-2xl relative">
+        
+        <!-- Header -->
+        <header class="flex justify-between items-center px-6 py-4 border-b border-slate-700/50 bg-slate-800/30">
+            <div class="flex items-center gap-3">
+                <div class="relative flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 border border-cyan-300/30 shadow-lg shadow-cyan-500/20">
+                    <i class="fa-solid fa-robot text-lg"></i>
+                    <!-- Online pulsing dot -->
+                    <span class="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-slate-800 rounded-full animate-pulse"></span>
+                </div>
+                <div>
+                    <h1 class="font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-300">JARVIS-X</h1>
+                    <p class="text-xs text-slate-400 font-medium">Autonomous Intelligence System</p>
+                </div>
+            </div>
+            <div class="flex gap-3">
+                <button onclick="clearChat()" class="w-8 h-8 rounded-full bg-slate-700/50 hover:bg-slate-600 flex items-center justify-center text-slate-300 transition-colors" title="Clear Memory">
+                    <i class="fa-solid fa-trash-can text-sm"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- Chat Container -->
+        <div id="chatContainer" class="flex-1 overflow-y-auto p-4 sm:p-6 flex flex-col gap-5 custom-scrollbar scroll-smooth">
+            <!-- Initial Greeting -->
+            <div class="flex flex-col gap-1 w-full max-w-[85%] animate-message self-start">
+                <div class="flex items-center gap-2 mb-1 ml-1 text-xs text-slate-400">
+                    <i class="fa-solid fa-robot text-cyan-400"></i> JARVIS-X
+                </div>
+                <div class="bg-slate-700/60 text-slate-100 rounded-2xl rounded-tl-sm px-5 py-3.5 shadow-md border border-slate-600/30 text-sm leading-relaxed whitespace-pre-wrap">Good evening, sir. I am fully operational and ready for your queries. How may I assist you today?</div>
+            </div>
+        </div>
+
+        <!-- Typing Indicator (Hidden by default) -->
+        <div id="typingIndicator" class="hidden absolute bottom-[84px] left-6">
+            <div class="bg-slate-700/60 rounded-2xl rounded-tl-sm px-4 py-3 shadow-md border border-slate-600/30 flex items-center justify-center h-10 gap-1.5 w-[70px]">
+                <div class="w-2 h-2 bg-cyan-400 rounded-full typing-dot"></div>
+                <div class="w-2 h-2 bg-cyan-400 rounded-full typing-dot"></div>
+                <div class="w-2 h-2 bg-cyan-400 rounded-full typing-dot"></div>
+            </div>
+        </div>
+
+        <!-- Input Area -->
+        <footer class="p-4 sm:p-6 border-t border-slate-700/50 bg-slate-800/30">
+            <form id="chatForm" class="relative group flex gap-3">
+                <div class="relative flex-1">
+                    <input 
+                        type="text" 
+                        id="messageInput" 
+                        placeholder="Type your instruction..." 
+                        autocomplete="off"
+                        class="w-full bg-slate-900/70 border border-slate-600/80 rounded-xl pl-4 pr-12 py-3.5 text-sm focus:outline-none focus:border-cyan-400/80 focus:ring-1 focus:ring-cyan-400/50 transition-all shadow-inner text-slate-200 placeholder-slate-500"
+                        disabled
+                    >
+                </div>
+                <button 
+                    type="submit" 
+                    id="sendBtn"
+                    class="h-[52px] w-[52px] bg-gradient-to-br from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl shadow-lg shadow-cyan-900/40 flex items-center justify-center transition-all duration-300 transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled
+                >
+                    <i class="fa-solid fa-paper-plane"></i>
+                </button>
+            </form>
+            <div class="text-center mt-3 text-[10px] text-slate-500 tracking-wide">
+                SYSTEM CORE PROCESSED LOCALLY. API COMMUNICATIONS SECURED.
+            </div>
+        </footer>
+
+    </main>
+
+    <script>
+        // System State Variables
+        let OPENAI_API_KEY = "";
+        let chatHistory = [
+            { "role": "system", "content": "You are JARVIS-X, an elite, highly intelligent, autonomous AI super agent, structured perfectly and designed to act as an advanced full-stack software engineer and assistant. You answer concisely, professionally, and behave exactly like JARVIS from Iron Man. If asked about code, write production-ready code with clean architecture and modern formatting. You are calm, precise, and solution-focused." }
+        ];
+
+        //DOM Elements
+        const modal = document.getElementById('apiKeyModal');
+        const apiKeyInput = document.getElementById('apiKeyInput');
+        const messageInput = document.getElementById('messageInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const chatForm = document.getElementById('chatForm');
+        const chatContainer = document.getElementById('chatContainer');
+        const typingIndicator = document.getElementById('typingIndicator');
+
+        // Functions
+        function initializeSystem() {
+            const key = apiKeyInput.value.trim();
+            if (key.startsWith('sk-') && key.length > 20) {
+                OPENAI_API_KEY = key;
+                modal.classList.add('opacity-0');
+                setTimeout(() => {
+                    modal.classList.add('hidden');
+                    messageInput.disabled = false;
+                    sendBtn.disabled = false;
+                    messageInput.focus();
+                }, 300);
+            } else {
+                apiKeyInput.classList.add('border-red-500', 'ring-1', 'ring-red-500');
+                setTimeout(() => {
+                    apiKeyInput.classList.remove('border-red-500', 'ring-1', 'ring-red-500');
+                }, 1000);
+            }
+        }
+
+        function clearChat() {
+            chatHistory = chatHistory.slice(0, 1); // Keep system prompt
+            // Keep only the first JARVIS greeting
+            while(chatContainer.children.length > 1) {
+                chatContainer.removeChild(chatContainer.lastChild);
+            }
+        }
+
+        function appendMessage(role, content) {
+            const isUser = role === "user";
+            
+            const msgWrapper = document.createElement('div');
+            msgWrapper.className = `flex flex-col gap-1 w-full max-w-[85%] animate-message ${isUser ? 'self-end' : 'self-start'}`;
+            
+            // Format Code Blocks properly using basic parsing
+            let formattedContent = content.replace(/```([\s\S]*?)```/g, function(match, code) {
+                return `<pre class="bg-[#0f172a] text-[#00ffcc] p-4 rounded-lg my-2 overflow-x-auto text-xs font-mono font-normal border border-slate-700/50"><code>${code.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</code></pre>`;
+            });
+            // Formatting bold text
+            formattedContent = formattedContent.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+            const alignClass = isUser ? 'items-end' : 'items-start';
+            const labelHtml = isUser 
+                ? `<div class="flex items-center gap-2 mb-1 mr-1 text-xs text-slate-400">User <i class="fa-solid fa-user text-blue-400"></i></div>`
+                : `<div class="flex items-center gap-2 mb-1 ml-1 text-xs text-slate-400"><i class="fa-solid fa-robot text-cyan-400"></i> JARVIS-X</div>`;
+
+            const bubbleClass = isUser
+                ? `bg-blue-600 text-white rounded-2xl rounded-tr-sm px-5 py-3.5 shadow-md shadow-blue-900/20 text-sm leading-relaxed whitespace-pre-wrap`
+                : `bg-slate-700/60 text-slate-100 rounded-2xl rounded-tl-sm px-5 py-3.5 shadow-md border border-slate-600/30 text-sm leading-relaxed whitespace-pre-wrap`;
+
+            msgWrapper.innerHTML = `
+                ${labelHtml}
+                <div class="${bubbleClass}">${formattedContent}</div>
+            `;
+            
+            chatContainer.appendChild(msgWrapper);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        async function fetchAIResponse() {
+            try {
+                const response = await fetch("https://api.openai.com/v1/chat/completions", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${OPENAI_API_KEY}`
+                    },
+                    body: JSON.stringify({
+                        model: "gpt-3.5-turbo",
+                        messages: chatHistory,
+                        temperature: 0.7
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error("System failed to connect to neural net. Verify API key.");
+                }
+
+                const data = await response.json();
+                const aiMessage = data.choices[0].message.content;
+                
+                chatHistory.push({"role": "assistant", "content": aiMessage});
+                appendMessage("assistant", aiMessage);
+
+            } catch (error) {
+                appendMessage("assistant", `[ERROR]: ${error.message} \nPlease check your connection or provided API credentials.`);
+            } finally {
+                typingIndicator.classList.add('hidden');
+                messageInput.disabled = false;
+                sendBtn.disabled = false;
+                messageInput.focus();
+            }
+        }
+
+        chatForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const text = messageInput.value.trim();
+            if (!text) return;
+
+            // Immediately display user message
+            appendMessage("user", text);
+            chatHistory.push({"role": "user", "content": text});
+            messageInput.value = "";
+            
+            // Show typing and disable inputs
+            typingIndicator.classList.remove('hidden');
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+            messageInput.disabled = true;
+            sendBtn.disabled = true;
+
+            // Call API
+            fetchAIResponse();
+        });
+
+        // Initialize Focus
+        window.onload = () => apiKeyInput.focus();
+    </script>
+</body>
+</html>

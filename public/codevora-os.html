@@ -1,0 +1,1172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CODEVORA-OS | Intelligence Core</title>
+  <meta name="description" content="CODEVORA-OS Engine" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #03050a;
+      --box-bg:  rgba(13, 18, 30, 0.75);
+      --box-border: rgba(0, 245, 255, 0.15);
+      --inp-bg:  rgba(0,0,0,0.4);
+      --cyan:    #00f5ff;
+      --cyan-d:  #00b3cc;
+      --violet:  #9b5de5;
+      --amber:   #fb8500;
+      --red:     #ef233c;
+      --txt:     #e2e8f0;
+      --dim:     #64748b;
+      --hud:     'Orbitron', sans-serif;
+      --sans:    'Inter', sans-serif;
+    }
+    
+    body.light-mode {
+      --bg:      #f1f5f9;
+      --box-bg:  rgba(255, 255, 255, 0.85);
+      --box-border: rgba(14, 165, 233, 0.3);
+      --inp-bg:  rgba(255, 255, 255, 0.9);
+      --cyan:    #0ea5e9;
+      --cyan-d:  #0284c7;
+      --violet:  #8b5cf6;
+      --amber:   #f59e0b;
+      --red:     #e11d48;
+      --txt:     #0f172a;
+      --dim:     #475569;
+    }
+    
+    html, body { 
+      height: 100%; background: #000 url('nasa_deep_space_hud_background_1775421044517.png') no-repeat center center fixed; 
+      background-size: cover; color: var(--txt); font-family: var(--sans); overflow: hidden; 
+      display: flex; flex-direction: column; transition: background 0.6s ease, color 0.4s ease; 
+    }
+    body.light-mode { background: #f1f5f9; background-image: none; }
+
+    /* Backdrops */
+    .bg-grid { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; background-image: linear-gradient(rgba(0, 245, 255, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 245, 255, 0.03) 1px, transparent 1px); background-size: 30px 30px; z-index: 0; pointer-events: none; }
+    .neon-glow { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 60vw; height: 60vw; background: radial-gradient(circle, rgba(155,93,229,0.05) 0%, rgba(0,245,255,0.05) 40%, transparent 70%); pointer-events: none; z-index: 0; filter: blur(50px); }
+    .scan-line { position: fixed; top: 0; left: 0; width: 100%; height: 10vh; background: linear-gradient(to bottom, rgba(0,245,255,0.1), transparent); pointer-events: none; animation: scan 6s ease-in-out infinite; z-index: 0; }
+
+    @keyframes fade-up { from { transform: translateY(30px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    
+    /* Productivity Tool labels (Enhanced HUD Styling) */
+    .tool-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; width: 100%; max-width: 900px; margin-top: 15px; animation: fade-up 1.2s ease; }
+    .tool-card { background: var(--box-bg); border: 1px solid var(--box-border); border-radius: 8px; padding: 8px 4px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; transition: 0.3s; gap: 6px; min-width: 0; }
+    .tool-card:hover { border-color: var(--cyan); transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,245,255,0.2); background: rgba(0, 245, 255, 0.05); }
+    .tool-card svg { color: var(--cyan); opacity: 0.9; width: 14px; height: 14px; }
+    .tool-card span { font-size: 7.5px; font-family: var(--hud); font-weight: 900; letter-spacing: 0.8px; color: var(--cyan); background: rgba(0, 245, 255, 0.1); padding: 3px 6px; border-radius: 4px; white-space: nowrap; width: 85%; text-align: center; border: 1px solid rgba(0, 245, 255, 0.1); }
+    @media (max-width: 900px) { .tool-grid { gap: 4px; max-width: 100%; } }
+    @keyframes pulse-idle { 0%, 100% { transform: scale(1); box-shadow: 0 0 30px rgba(0, 245, 255, 0.2); } 50% { transform: scale(1.05); box-shadow: 0 0 60px rgba(0, 245, 255, 0.4); } }
+    @keyframes pulse-listen { 0%, 100% { transform: scale(1.1); box-shadow: 0 0 50px rgba(155, 93, 229, 0.5), 0 0 100px rgba(0, 245, 255, 0.3); } 50% { transform: scale(1.25); box-shadow: 0 0 80px rgba(155, 93, 229, 0.8), 0 0 150px rgba(0, 245, 255, 0.6); border-color: var(--violet); } }
+    @keyframes pulse-think { 0% { transform: scale(1.1); box-shadow: 0 0 40px var(--cyan); } 50% { transform: scale(0.9); box-shadow: 0 0 100px var(--violet); border-color: var(--violet); } 100% { transform: scale(1.1); box-shadow: 0 0 40px var(--cyan); } }
+    @keyframes scan { 0% { transform: translateY(-100vh); opacity: 0; } 50% { opacity: 0.3; } 100% { transform: translateY(100vh); opacity: 0; } }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    @keyframes rspin { to { transform:rotate(-360deg); } }
+
+    /* Reusable Utilities */
+    .input-field { width: 100%; background: var(--inp-bg); border: 1px solid var(--box-border); border-radius: 10px; padding: 14px 16px; color: var(--txt); margin-bottom: 12px; font-family: var(--sans); font-size: 14px; letter-spacing: 1px; transition: all 0.3s; outline: none; box-shadow: inset 0 2px 4px rgba(0,0,0,0.1); }
+    .input-field:focus { border-color: var(--cyan); background: var(--inp-bg); box-shadow: 0 0 0 3px rgba(0,245,255,0.1), inset 0 2px 4px rgba(0,0,0,0.1); }
+    .input-field::placeholder { color: var(--dim); }
+    
+    .btn-action { width: 100%; padding: 14px; border-radius: 10px; font-size: 13px; font-family: var(--hud); letter-spacing: 2px; font-weight: 700; cursor: pointer; border: 1px solid transparent; background: var(--cyan); color: #fff; text-transform: uppercase; transition: all 0.3s; box-shadow: 0 0 15px rgba(0,245,255,0.3); }
+    body.light-mode .btn-action { color: #0f172a; }
+    .btn-action:hover { background: var(--cyan-d); transform: translateY(-1px); box-shadow: 0 5px 25px rgba(0,245,255,0.4); }
+    .btn-action:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+    .icon { width: 20px; height: 20px; }
+
+    /* Modals */
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 100; align-items: center; justify-content: center; backdrop-filter: blur(10px); }
+    .modal-box { background: var(--box-bg); border: 1px solid var(--cyan); padding: 30px; border-radius: 12px; width: 400px; text-align: center; box-shadow: 0 0 30px rgba(0,245,255,0.2); animation: fade-up 0.3s ease; }
+    .modal-title { font-family: var(--hud); color: var(--txt); margin-bottom: 20px; font-size: 16px; letter-spacing: 3px; text-shadow:0 0 10px var(--cyan); }
+    .nav-btn { cursor: pointer; background: transparent; border: 1px solid var(--box-border); color: var(--txt); padding: 5px 12px; border-radius: 6px; font-size: 12px; margin-left:14px; transition: 0.3s; font-family:var(--sans); }
+    .nav-btn:hover { border-color: var(--cyan); color: var(--cyan); box-shadow:0 0 10px rgba(0,245,255,0.2); }
+
+    /* Login Gateway UI */
+    /* Twinkling Starfield Matrix */
+    #star-field {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      background: #000; overflow: hidden; pointer-events: none;
+      background-image: 
+        radial-gradient(1px 1px at 20px 30px, #eee, rgba(0,0,0,0)),
+        radial-gradient(1px 1px at 40px 70px, #fff, rgba(0,0,0,0)),
+        radial-gradient(2px 2px at 50px 160px, #ddd, rgba(0,0,0,0)),
+        radial-gradient(2px 2px at 90px 40px, #fff, rgba(0,0,0,0)),
+        radial-gradient(1px 1px at 130px 80px, #fff, rgba(0,0,0,0)),
+        radial-gradient(2px 2px at 160px 120px, #ddd, rgba(0,0,0,0));
+      background-repeat: repeat;
+      background-size: 200px 200px;
+      animation: star-drift 100s linear infinite, star-twinkle 4s ease-in-out infinite alternate;
+      opacity: 0.8;
+    }
+    @keyframes star-drift { 
+      from { transform: rotate(0deg) scale(1); } 
+      to { transform: rotate(360deg) scale(1.2); } 
+    }
+    @keyframes star-twinkle {
+      0%, 100% { opacity: 0.6; }
+      50% { opacity: 1; filter: brightness(1.5); }
+    }
+    
+    .nebula-pulse {
+       position:absolute; width:1000px; height:1000px; border-radius:50%;
+       filter: blur(150px); opacity:0.12; pointer-events:none; z-index:1;
+       animation: pulse-drift 15s ease-in-out infinite alternate;
+    }
+    .pulse-red { background:radial-gradient(circle, #ff004c, transparent); top:-200px; left:-200px; }
+    .pulse-blue { background:radial-gradient(circle, #004cff, transparent); bottom:-200px; right:-200px; }
+    @keyframes pulse-drift { 0% { transform:translate(0,0) scale(1); } 100% { transform:translate(100px, 100px) scale(1.3); } }
+    
+    #auth-gateway { 
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1000; 
+      display: flex; justify-content: center; align-items: center; 
+      transition: opacity 1s cubic-bezier(0.4, 0, 0.2, 1), transform 1s cubic-bezier(0.4, 0, 0.2, 1); 
+      overflow: hidden;
+    }
+    #auth-gateway::after {
+      content: ''; position: absolute; inset: 0; background: radial-gradient(circle, transparent, rgba(0,0,0,0.8)); pointer-events: none;
+    }
+    .auth-box { 
+      width: 440px; padding: 60px 50px; background: rgba(8,9,20,0.6); 
+      backdrop-filter: blur(60px); -webkit-backdrop-filter: blur(60px);
+      border-radius: 40px; border: 1px solid rgba(0,245,255,0.15); 
+      box-shadow: 0 50px 120px rgba(0,0,0,0.6), 0 0 80px rgba(0,245,255,0.05);
+      text-align: center; position: relative; overflow: hidden;
+      animation: gate-reveal 1s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+    .auth-box::before {
+      content:''; position:absolute; top:-100%; left:-100%; width:300%; height:300%;
+      background: conic-gradient(from 0deg, transparent, rgba(0,245,255,0.05), transparent);
+      animation: spin 8s linear infinite; pointer-events:none;
+    }
+    @keyframes gate-reveal { from { opacity:0; transform:scale(0.95) translateY(40px); } to { opacity:1; transform:scale(1) translateY(0); } }
+    
+    .auth-title { font-family: var(--hud); font-size: 34px; font-weight: 900; letter-spacing: 14px; color: var(--cyan); margin-bottom: 6px; text-shadow: 0 0 30px rgba(0,245,255,0.4); }
+    .auth-subtitle { font-size: 8px; color: var(--dim); letter-spacing: 4px; text-transform: uppercase; margin-bottom: 35px; opacity: 0.7; }
+    
+    .gatekeeper {
+      width: 65px; height: 65px; margin: 0 auto 25px; border-radius: 50%;
+      background: radial-gradient(circle at 30% 30%, rgba(0,245,255,0.4), rgba(0,0,0,0.9));
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 0 40px rgba(0,245,255,0.2), inset 0 0 20px rgba(0,245,255,0.1);
+      border: 1px solid rgba(0,245,255,0.2);
+      animation: float-baby 4s ease-in-out infinite, gate-pulse 2s infinite alternate;
+    }
+    @keyframes gate-pulse { from { box-shadow: 0 0 20px rgba(0,245,255,0.1); } to { box-shadow: 0 0 60px rgba(0,245,255,0.4); } }
+    
+    .mission-log {
+       position: absolute; top:40px; right:40px; width:180px; height:60px;
+       font-family: monospace; font-size:7px; color:var(--cyan); opacity:0.4;
+       overflow:hidden; pointer-events:none; text-align:left;
+    }
+    .mission-log div { animation: scroll-log 10s linear infinite; }
+    @keyframes scroll-log { 0% { transform:translateY(100%); } 100% { transform:translateY(-100%); } }
+
+    .orbital-sensor {
+       position:absolute; width:700px; height:700px; border-radius:50%;
+       border: 1px dashed rgba(0,245,255,0.08); pointer-events:none;
+       animation: orbit-rev 30s linear infinite;
+    }
+    .orbital-sensor-inner {
+       position:absolute; width:520px; height:520px; border-radius:50%;
+       border: 1px solid rgba(0,245,255,0.05); pointer-events:none;
+       animation: orbit-rev 15s linear reverse infinite;
+    }
+    @keyframes orbit-rev { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+    /* Neural Security Scanline */
+    .auth-box::after {
+       content:''; position:absolute; top:0; left:0; width:100%; height:4px;
+       background: linear-gradient(to right, transparent, var(--cyan), transparent);
+       box-shadow: 0 0 15px var(--cyan);
+       opacity:0; animation: laser-scan 4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+       pointer-events:none; z-index:10;
+    }
+    @keyframes laser-scan {
+       0% { top: -10%; opacity:0; }
+       10% { opacity:0.6; }
+       90% { opacity:0.6; }
+       100% { top: 110%; opacity:0; }
+    }
+    @keyframes float-baby { 0%, 100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-15px) rotate(5deg); } }
+    
+    #status-pulse { animation: blink 2s infinite; }
+    @keyframes blink { 0%, 100% { opacity:0.4; } 50% { opacity:1; } }
+    .btn-oauth { width: 100%; padding: 12px; border-radius: 10px; font-size: 14px; font-weight: 500; font-family: var(--sans); display: flex; align-items: center; justify-content: center; gap: 12px; cursor: pointer; margin-bottom: 14px; transition: all 0.2s ease; border: 1px solid rgba(255,255,255,0.1); outline: none; }
+    .btn-google { background: rgba(255,255,255,0.03); color: #fff; }
+    .btn-google:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.2); }
+    .btn-github { background: rgba(0,0,0,0.3); color: #fff; }
+    .btn-github:hover { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.2); }
+    .divider { display: flex; align-items: center; margin: 24px 0; }
+    .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: rgba(255,255,255,0.05); }
+    .divider span { padding: 0 12px; color: #475569; font-size: 11px; font-weight: 600; letter-spacing: 2px; }
+    
+    /* Core Main OS Layout */
+    #core-system { display: none; width: 100%; height: 100%; opacity: 0; transition: opacity 1s ease; z-index: 10; flex-direction: column;}
+    .topbar { display: flex; align-items: center; justify-content: space-between; padding: 24px 40px; }
+    .brand { font-family: var(--hud); font-size: 20px; font-weight: 900; letter-spacing: 6px; color: var(--cyan); text-shadow: 0 0 20px rgba(0,245,255,0.4); }
+    .brand span { color: #fff; opacity: 0.8; }
+    .status { font-family: var(--hud); font-size: 11px; letter-spacing: 3px; color: var(--dim); display: flex; align-items: center; gap: 8px; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 10px var(--cyan); animation: pulse-idle 2s infinite; }
+    
+    .os-body { display:flex; flex:1; width:100%; overflow:hidden; position:relative; }
+    .main { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0 40px; transition: transform 0.4s ease; }
+    
+    .orb-container { position: relative; width: 220px; height: 220px; display: flex; justify-content: center; align-items: center; margin-bottom: 50px; cursor: pointer; }
+    .orb { 
+      width: 140px; height: 140px; border-radius: 50%; 
+      background: radial-gradient(circle at 30% 30%, rgba(0, 245, 255, 0.15), rgba(0, 0, 0, 0.9)); 
+      box-shadow: 0 0 50px rgba(0, 245, 255, 0.2), inset 0 0 30px rgba(0, 245, 255, 0.1); 
+      display: flex; align-items: center; justify-content: center; 
+      position: relative; cursor: pointer; transition: 0.5s cubic-bezier(0.4, 0, 0.2, 1); z-index: 2; 
+      border: 1px solid rgba(0, 245, 255, 0.1); 
+    }
+    .orb.thinking { box-shadow: 0 0 80px var(--violet); }
+    .orb.listening { box-shadow: 0 0 80px var(--cyan); }
+    .orb.speaking { transform: scale(1.08); box-shadow: 0 0 100px var(--amber); }
+
+    /* AI BABY VISION SYSTEM */
+    .baby-eye {
+      width: 32px; height: 42px; background: #fff; border-radius: 50%;
+      position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center;
+      box-shadow: inset 0 0 15px rgba(0,245,255,0.4), 0 0 20px rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+    .pupil {
+      width: 16px; height: 16px; background: radial-gradient(circle at 30% 30%, #333, #000); border-radius: 50%;
+      position: absolute; transition: 0.1s ease-out;
+      will-change: transform;
+    }
+    .pupil::after {
+      content:''; width:5px; height:5px; background:white; position:absolute; top:3px; right:3px; border-radius:50%; opacity:0.8;
+    }
+
+    @keyframes neural-scan {
+      0% { transform: translate(0,0) scale(1.1); }
+      20% { transform: translate(6px, -6px) scale(1.1); }
+      40% { transform: translate(-6px, 3px) scale(0.9); }
+      60% { transform: translate(4px, 6px) scale(1.1); }
+      80% { transform: translate(-4px, -2px) scale(1.1); }
+      100% { transform: translate(0,0) scale(1.1); }
+    }
+
+    .orb.thinking .pupil, .orb.listening .pupil, .orb.speaking .pupil {
+      animation: neural-scan 2s infinite ease-in-out;
+    }
+    .ring { position: absolute; border-radius: 50%; border: 1px solid transparent; pointer-events: none; }
+    .ring-1 { width: 100%; height: 100%; border-top-color: rgba(0,245,255,0.3); animation: spin 8s linear infinite; }
+    .ring-2 { width: 85%; height: 85%; border-bottom-color: rgba(155,93,229,0.3); animation: rspin 12s linear infinite; }
+    
+    .status-text, .transcript-box { display: none !important; }
+
+    /* Chat & History Sidebar Drawer */
+    #sidebar-terminal {
+      position: absolute; right: -450px; top: 0; width: 420px; height: 100%;
+      background: var(--box-bg); backdrop-filter: blur(25px); border-left: 1px solid var(--box-border);
+      transition: right 0.4s cubic-bezier(0.4, 0, 0.2, 1); display: flex; flex-direction: column; z-index: 20;
+    }
+    #sidebar-terminal.open { right: 0; box-shadow: -20px 0 50px rgba(0,0,0,0.3); }
+    
+    .term-header { padding: 20px 24px; border-bottom: 1px solid var(--box-border); display: flex; justify-content: space-between; align-items:center; }
+    .term-title { font-family: var(--hud); font-size: 14px; letter-spacing: 3px; color: var(--cyan); }
+    .term-close { cursor: pointer; color: var(--dim); font-size: 20px; transition: 0.2s; }
+    .term-close:hover { color: var(--red); }
+    
+    .chat-history { flex: 1; padding: 24px; overflow-y: auto; display:flex; flex-direction:column; gap:16px; scroll-behavior: smooth; }
+    .chat-history::-webkit-scrollbar { width: 4px; }
+    .chat-history::-webkit-scrollbar-thumb { background: rgba(0,245,255,0.2); border-radius:4px; }
+    
+    .bubble { max-width: 85%; padding: 14px 18px; border-radius: 12px; font-size: 14px; line-height: 1.5; animation: fade-up 0.3s ease; }
+    .bubble.user { align-self: flex-end; background: rgba(0,245,255,0.1); border: 1px solid rgba(0,245,255,0.2); color: var(--txt); border-bottom-right-radius: 2px; }
+    .bubble.ai { align-self: flex-start; background: rgba(155,93,229,0.1); border: 1px solid rgba(155,93,229,0.2); color: var(--txt); border-bottom-left-radius: 2px; }
+    
+    .term-footer { padding: 20px; border-top: 1px solid var(--box-border); background: var(--box-bg); }
+    .term-row { display: flex; gap: 10px; }
+    .term-input { flex: 1; background: var(--inp-bg); border: 1px solid var(--box-border); color: var(--txt); border-radius: 8px; padding: 12px 14px; outline: none; font-family: var(--sans); transition: border-color 0.3s; }
+    .term-input:focus { border-color: var(--cyan); box-shadow: inset 0 0 10px rgba(0,245,255,0.05); }
+    
+    .term-send { display:flex; align-items:center; justify-content:center; gap:8px; background: rgba(0,245,255,0.1); border: 1px solid var(--cyan); color: var(--cyan); padding: 0 20px; border-radius: 8px; font-weight: 700; cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); font-family:var(--hud); font-size:12px; letter-spacing:2px; }
+    .term-send:hover { background: var(--cyan); color: #000; box-shadow: 0 0 20px rgba(0,245,255,0.5); transform: translateY(-2px); }
+    .term-send:active { transform: translateY(0); }
+    .session-btn { width:100%; margin-top:10px; padding:8px; background:transparent; border:1px solid var(--dim); color:var(--dim); font-size:11px; font-family:var(--hud); letter-spacing:2px; border-radius:6px; cursor:pointer; }
+    .session-btn:hover { border-color:var(--red); color:var(--red); }
+  </style>
+</head>
+<body>
+
+<div id="star-field"></div>
+<div class="nebula-pulse pulse-red"></div>
+<div class="nebula-pulse pulse-blue"></div>
+<div class="bg-grid"></div>
+<div class="neon-glow"></div>
+<div class="scan-line"></div>
+
+<!-- ═══ API MODAL OVERLAY ═══ -->
+<div class="modal-overlay" id="api-modal">
+  <div class="modal-box">
+    <div class="modal-title">PROVIDER CONFIGURATION</div>
+    <select id="api-provider" class="input-field" style="text-align:center; margin-bottom:12px; cursor:pointer">
+      <option value="Open AI">OpenAI API (GPT-4o)</option>
+      <option value="Gemini">Google Gemini API</option>
+      <option value="Anthropic">Anthropic API (Claude)</option>
+    </select>
+    <input type="password" id="api-key" class="input-field" placeholder="Paste your secure API key here..." />
+    <button class="btn-action" onclick="saveApiKey()">SAVE CONFIGURATION</button>
+  </div>
+</div>
+
+<!-- ═══ AUTHENTICATION GATEWAY ═══ -->
+<div id="auth-gateway">
+  <!-- NASA HUD OVERLAYS -->
+  <div class="orbital-sensor"></div>
+  <div class="orbital-sensor-inner"></div>
+  <div class="mission-log">
+     <div>
+       > INJECTING DATA...<br/>
+       > SYNCING ORBIT...<br/>
+       > SATELLITE V3.2 OK<br/>
+       > GOD-ENGINE START<br/>
+       > SECTOR CLEAR...<br/>
+       > UPLINK ESTABLISHED
+     </div>
+  </div>
+  
+  <div style="position:absolute; top:40px; left:40px; color:var(--cyan); font-family:var(--hud); font-size:9px; letter-spacing:2px; opacity:0.6; pointer-events:none;">
+     SECTOR: NEURAL-09 // LAT: 21.02 // LON: 105.83<br/>SATELLITE LINK: ACTIVE (98.4%)
+  </div>
+  <div style="position:absolute; bottom:40px; right:40px; color:var(--cyan); font-family:var(--hud); font-size:9px; letter-spacing:2px; opacity:0.6; pointer-events:none; text-align:right;">
+     OS VERSION: GOD-ENGINE_V2.4<br/>ORBITAL RADIUS: 42,164 KM
+  </div>
+  
+  <div class="auth-box">
+    <div class="gatekeeper">
+       <div style="display:flex; gap:8px;">
+          <div style="width:10px; height:12px; background:#000; border-radius:50%; position:relative;"></div>
+          <div style="width:10px; height:12px; background:#000; border-radius:50%; position:relative;"></div>
+       </div>
+    </div>
+    <div class="auth-title">CODEVORA</div>
+    <div class="auth-subtitle">Space Exploration Command</div>
+    
+    <div id="status-pulse" style="font-size:7px; color:var(--cyan); margin-bottom:20px; letter-spacing:2px; opacity:0.6; height:10px;">SYNCING WITH ORBITAL SATELLITE...</div>
+    
+    <button class="btn-oauth btn-google" onclick="mockLogin()">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+      Continue with Google
+    </button>
+    
+    <button class="btn-oauth btn-github" onclick="mockLogin()">
+      <svg class="icon" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.866-.013-1.7-2.782.603-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.463-1.11-1.463-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.268 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.293 2.747-1.025 2.747-1.025.546 1.379.203 2.394.1 2.647.64.699 1.029 1.592 1.029 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.164 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
+      Continue with GitHub
+    </button>
+
+    <div class="divider"><span>OR</span></div>
+    
+    <div id="phone-step">
+      <input type="text" id="fullname" class="input-field" placeholder="Enter your full name" style="text-align:left; padding-left:14px" />
+      <div style="display:flex; gap:10px; margin-bottom:12px;">
+        <select id="country-code" class="input-field" style="width:120px; margin-bottom:0; cursor:pointer; padding: 14px 10px; font-size:15px; appearance: none; -webkit-appearance: none;">
+          <option value="+91" selected>🇮🇳 +91</option>
+          <option value="+1">🇺🇸 +1</option>
+          <option value="+44">🇬🇧 +44</option>
+          <option value="+61">🇦🇺 +61</option>
+        </select>
+        <input type="tel" id="phone" class="input-field" style="margin-bottom:0; text-align:left" placeholder="98765 43210" />
+      </div>
+      <button class="btn-action" id="btn-send-otp" onclick="requestOtp()">SEND SECURITY OTP</button>
+      <p id="phone-err" style="color:#ff4d6d; font-size:11px; margin-top:8px; opacity:0; transition:opacity 0.2s">Please enter a valid phone number</p>
+    </div>
+    
+    <div id="otp-step" style="display:none; animation: fade-up 0.4s ease;">
+      <p style="font-size:12px; color:var(--cyan); margin-bottom:12px; letter-spacing:1px">OTP SENT SUCCESSFULLY</p>
+      <input type="text" id="otp" class="input-field" placeholder="123456" style="letter-spacing:14px; font-size:20px; font-weight:600; color:var(--cyan)" maxlength="6" />
+      <button class="btn-action" style="background:var(--violet); color:#fff; box-shadow:0 0 15px rgba(155,93,229,0.3)" onclick="verifyOtpLogin()">VERIFY & ENTER</button>
+      <p id="otp-err" style="color:#ff4d6d; font-size:11px; margin-top:8px; opacity:0; transition:opacity 0.2s">Incorrect OTP. Try again.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ CORE SYSTEM ═══ -->
+<div id="core-system">
+  <header class="topbar">
+    <div class="brand" style="display:flex; flex-direction:column; align-items:flex-start; gap:8px;">
+      <div style="display:flex; align-items:center;">
+        <button class="nav-btn" style="border-radius:50%; width:28px; height:28px; padding:0; display:flex; justify-content:center; align-items:center; color:var(--amber)" onclick="toggleTheme()" id="theme-btn">
+           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        </button>
+        <button class="nav-btn" style="margin-left:8px; border-radius:50%; width:28px; height:28px; padding:0; display:flex; justify-content:center; align-items:center; color:var(--red)" onclick="toggleAudio()" id="audio-btn">
+           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2V15H6L11 19V5z"></path><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>
+        </button>
+      </div>
+      <button onclick="logOut()" style="background:transparent; border:none; color:var(--red); font-size:10px; font-family:var(--hud); cursor:pointer; letter-spacing:1px; padding:0; opacity:0.7; transition:0.3s; display:flex; align-items:center; gap:6px;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path><line x1="12" y1="2" x2="12" y2="12"></line></svg>
+        EXIT
+      </button>
+    </div>
+
+    <!-- CENTRAL NEON BRANDING -->
+    <div style="position:absolute; left:50%; transform:translateX(-50%); pointer-events:none; text-align:center;">
+       <div style="font-family:var(--hud); font-weight:900; font-size:18px; letter-spacing:8px; color:var(--cyan); text-shadow:0 0 15px rgba(0,245,255,0.4);">
+          CODEVORA<span style="color:var(--txt); opacity:0.5; font-weight:300">-OS</span>
+       </div>
+       <div style="font-size:7px; color:var(--dim); opacity:0.6; letter-spacing:4px; margin-top:-2px; text-transform:uppercase;">God Engine Infrastructure</div>
+    </div>
+    <div class="status" id="backend-status">
+      <span id="b-text"></span>
+      <span style="color:var(--cyan); margin-left:14px; padding-left:14px; border-left:1px solid rgba(255,255,255,0.2); font-weight:600; letter-spacing:2px; text-transform:uppercase;" id="user-pill"></span>
+      <div style="display:flex; align-items:center; margin-left:14px;">
+         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+         <select id="os-lang" onchange="updateOSLang()" style="background:transparent; border:1px solid rgba(255,255,255,0.2); color:var(--cyan); font-family:var(--hud); font-size:10px; padding:6px 10px; border-radius:4px; cursor:pointer; outline:none;">
+            <option value="Hindi" selected>🇮🇳 HINDI</option>
+            <option value="English">🇺🇸 ENGLISH</option>
+            <option value="Nepali">🇳🇵 NEPALI</option>
+            <option value="Bengali">🇧🇩 BENGALI</option>
+            <option value="Punjabi">🚜 PUNJABI</option>
+         </select>
+      </div>
+      <button class="nav-btn" style="color:var(--amber); border-color:var(--amber); font-weight:700; box-shadow:0 0 10px rgba(251, 133, 0, 0.2)" onclick="triggerUpgrade()" id="btn-upgrade">🚀 UPGRADE</button>
+    </div>
+  </header>
+
+  <div class="os-body">
+    <main class="main" id="dashboard-view" style="animation: fade-up 1s ease;">
+      <div class="orb-container" onclick="toggleVoice()">
+        <div class="ring ring-1"></div>
+        <div class="ring ring-2"></div>
+        <div class="orb" id="voice-orb">
+           <div style="display:flex; gap:15px; margin-top:-10px;">
+              <div class="baby-eye"><div class="pupil"></div></div>
+              <div class="baby-eye"><div class="pupil"></div></div>
+           </div>
+        </div>
+      </div>
+
+      <!-- Unified ChatGPT-Style Chat Console -->
+      <div style="display:flex; align-items:center; width:100%; max-width:650px; margin-top:20px; position:relative; background:var(--inp-bg); border-radius:30px; border:1px solid var(--box-border); padding:6px 8px; box-shadow:0 8px 30px rgba(0,0,0,0.15); transition:border-color 0.3s;">
+         
+         <input type="file" id="file-input-hidden" style="display:none" onchange="handleFileSelect('file-input-hidden')" />
+         <input type="file" id="photo-input-hidden" accept="image/*" style="display:none" onchange="handleFileSelect('photo-input-hidden')" />
+
+         <!-- Attachment / Files Button -->
+         <button style="background:transparent; border:none; padding:12px; cursor:pointer; color:var(--dim); transition:0.2s" onmouseover="this.style.color='var(--cyan)'" onmouseout="this.style.color='var(--dim)'" title="Attach Files" onclick="document.getElementById('file-input-hidden').click()">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
+         </button>
+         
+         <!-- Upload Photos / Camera Button -->
+         <button style="background:transparent; border:none; padding:12px 6px; cursor:pointer; color:var(--dim); transition:0.2s" onmouseover="this.style.color='var(--cyan)'" onmouseout="this.style.color='var(--dim)'" title="Upload Images" onclick="document.getElementById('photo-input-hidden').click()">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+         </button>
+
+         <!-- Core Text Input -->
+         <input type="text" id="center-input" placeholder="Ask anything..." style="flex:1; background:transparent; border:none; padding:12px 14px; font-size:15px; color:var(--txt); outline:none; font-family:var(--sans)" onkeypress="if(event.key === 'Enter') handleCenterInput()" />
+
+         <!-- Voice Dictation Switch -->
+         <button style="background:transparent; border:none; padding:12px; cursor:pointer; color:var(--dim); transition:0.2s" onmouseover="this.style.color='var(--violet)'" onmouseout="this.style.color='var(--dim)'" title="Voice Dictation Override" onclick="toggleVoice()">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+         </button>
+
+         <!-- Execute Engine Vector -->
+         <button class="term-send" style="border-radius:24px; padding:12px 20px; font-size:14px; margin-left:4px;" onclick="handleCenterInput()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+         </button>
+      </div>
+
+      <!-- AI Productivity Suite Grid -->
+      <div class="tool-grid">
+         <div class="tool-card" onclick="openTool('Slides')">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+            <span>AI SLIDES<br/><small style="font-size:7px; opacity:0.8">स्लाइड्स</small></span>
+         </div>
+         <div class="tool-card" onclick="openTool('Sheets')">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+            <span>AI SHEETS<br/><small style="font-size:7px; opacity:0.8">शीट्स</small></span>
+         </div>
+         <div class="tool-card" onclick="openTool('Docs')">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"></polyline></svg>
+            <span>AI DOCS<br/><small style="font-size:7px; opacity:0.8">डॉक्स</small></span>
+         </div>
+         <div class="tool-card" onclick="openTool('Designer')">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg>
+            <span>AI DESIGNER<br/><small style="font-size:7px; opacity:0.8">डिजाइनर</small></span>
+         </div>
+         <div class="tool-card" onclick="openTool('Image')">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"></polyline></svg>
+            <span>AI IMAGE<br/><small style="font-size:7px; opacity:0.8">इमेज</small></span>
+         </div>
+         <div class="tool-card" onclick="openTool('Music')">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
+            <span>AI MUSIC<br/><small style="font-size:7px; opacity:0.8">म्यूजिक</small></span>
+         </div>
+         <div class="tool-card" onclick="openTool('Video')">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
+            <span>AI VIDEO<br/><small style="font-size:7px; opacity:0.8">वीडियो</small></span>
+         </div>
+         <div class="tool-card" onclick="openTool('Chat')">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+            <span>AI CHAT<br/><small style="font-size:7px; opacity:0.8">चैट</small></span>
+         </div>
+      </div>
+    </main>
+
+    <!-- Full-Screen Tool Workspace View -->
+    <main class="main" id="workspace-view" style="display:none; flex-direction:column; align-items:flex-start; padding:40px; animation: fade-up 0.5s ease; background:rgba(0,0,0,0.2); backdrop-filter:blur(20px); border-radius:30px; margin:20px; border:1px solid rgba(255,255,255,0.05);">
+       <div style="display:flex; justify-content:space-between; width:100%; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:20px; margin-bottom:30px;">
+          <div>
+            <h2 id="ws-title" style="color:var(--cyan); font-family:var(--hud); letter-spacing:4px; margin-bottom:4px;">WORKSPACE</h2>
+            <p id="ws-subtitle" style="color:var(--dim); font-size:12px;">Initializing neural workspace environment...</p>
+          </div>
+          <button class="nav-btn" style="border-color:var(--red); color:var(--red)" onclick="closeWorkspace()">🔙 EXIT WORKSPACE</button>
+       </div>
+       
+       <div id="ws-content" style="width:100%; flex:1; display:flex; gap:20px;">
+          <!-- Dynamic Tool UI bits will be injected here by openTool JS -->
+       </div>
+    </main>
+
+    <!-- Chat / History Sidebar -->
+    <div id="sidebar-terminal">
+      <div class="term-header">
+        <button class="nav-btn" style="margin-left:0; border-color:var(--cyan); color:var(--cyan); font-weight:bold; box-shadow:0 0 10px rgba(0,245,255,0.2)" onclick="startNewChat()">+ NEW CHAT</button>
+        <div class="term-close" onclick="toggleSidebar()">✕</div>
+      </div>
+      
+      <!-- Archived Chat Threads Container -->
+      <div id="past-chats" style="display:flex; overflow-x:auto; padding:12px 24px; border-bottom:1px solid rgba(255,255,255,0.05); gap:10px; flex-shrink:0;">
+        <!-- Thread badges inject here -->
+      </div>
+      
+      <div class="chat-history" id="chat-box">
+        <!-- Bubbles injected globally -->
+        <div style="color:var(--dim); text-align:center; font-size:12px; margin-top:40px;">No interaction history found for this session.</div>
+      </div>
+      <div class="term-footer">
+        <div class="term-row">
+          <input type="text" id="term-input" class="term-input" placeholder="Type command manually..." onkeypress="if(event.key === 'Enter') handleTextInput()" />
+          <button class="term-send" onclick="handleTextInput()">
+            SEND
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+          </button>
+        </div>
+        <button class="session-btn" onclick="clearSession()">⟳ CLEAR SESSION HISTORY</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+    <!-- Tool Modal -->
+    <div id="tool-modal" class="modal-overlay">
+      <div class="modal-box" style="width:550px; position:relative;">
+        <div class="term-close" onclick="document.getElementById('tool-modal').style.display='none'" style="position:absolute; top:20px; right:20px;">✕</div>
+        <div class="modal-title" id="t-modal-title" style="color:var(--txt)">AI TOOL PROTOCOL</div>
+        <div id="t-modal-desc" style="color:var(--dim); font-size:13px; font-family:var(--sans); margin-bottom:24px;">Select a premium template to initiate your neural generation.</div>
+        
+        <div id="template-list" style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:20px;">
+           <!-- Templates inject here -->
+        </div>
+
+        <button class="btn-action" onclick="document.getElementById('tool-modal').style.display='none'">CANCEL OPS</button>
+      </div>
+    </div>
+
+<script>
+// --- Configuration & UI Management ---
+let activeProvider = "Open AI";
+let activeApiKey = "";
+let isSidebarOpen = false;
+let isMuted = true;
+let targetLang = 'Hindi';
+
+function updateOSLang() {
+  targetLang = document.getElementById('os-lang').value;
+  speakNative(`Neural dialect recalibrated to ${targetLang}.`);
+  if(!document.getElementById('sidebar-terminal').classList.contains('open')) toggleSidebar();
+  addChatBubble('ai', `[System]: Neural engine now processing in ${targetLang} mode.`);
+}
+
+function saveApiKey() {
+  activeProvider = document.getElementById('api-provider').value;
+  activeApiKey = document.getElementById('api-key').value.trim();
+  document.getElementById('api-modal').style.display = 'none';
+  speakNative("Network switch confirmed. Neural engine explicitly routed to " + activeProvider + " servers.");
+}
+
+function toggleSidebar() {
+  isSidebarOpen = !isSidebarOpen;
+  document.getElementById('sidebar-terminal').classList.toggle('open');
+}
+
+function triggerUpgrade() {
+  const btn = document.getElementById('btn-upgrade');
+  const cache = btn.innerHTML;
+  btn.innerHTML = "ACCESS DENIED";
+  speakNative("Upgrading your God Engine requires a Codevora Pro neural uplink. Please contact administration.");
+  setTimeout(() => btn.innerHTML = cache, 2500);
+}
+
+function toggleTheme() {
+   document.body.classList.toggle('light-mode');
+   const btn = document.getElementById('theme-btn');
+   if(document.body.classList.contains('light-mode')) {
+      btn.style.color = "var(--violet)";
+      btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
+      speakNative("Visual matrix shifted to Light Mode.");
+   } else {
+      btn.style.color = "var(--amber)";
+      btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`;
+      speakNative("Visual matrix restored to Dark Protocol.");
+   }
+}
+
+function toggleAudio() {
+   isMuted = !isMuted;
+   const btn = document.getElementById('audio-btn');
+   if(isMuted) {
+      btn.style.color = "var(--red)";
+      btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2V15H6L11 19V5z"></path><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>`;
+      console.log("Audio Silenced.");
+   } else {
+      btn.style.color = "var(--cyan)";
+      btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>`;
+      speakNative("Audio sub-systems re-engaged.");
+   }
+}
+
+// History Logging System
+let archivedSessions = [];
+
+function startNewChat() {
+  const box = document.getElementById('chat-box');
+  if(!box.innerHTML.includes('bubble')) return; // Skip if chat is already totally empty
+  
+  archivedSessions.push(box.innerHTML);
+  box.innerHTML = `<div style="color:var(--cyan); text-align:center; font-size:12px; margin-top:40px;">New secure neural thread instantiated.</div>`;
+  renderPastChats();
+  speakNative("New thread initialized. Previous data archived to the right side memory banks.");
+}
+
+function renderPastChats() {
+  const pBox = document.getElementById('past-chats');
+  pBox.innerHTML = '';
+  archivedSessions.forEach((htmlBlock, index) => {
+    const btn = document.createElement('button');
+    btn.className = 'session-btn';
+    btn.style.width = 'auto'; btn.style.margin = '0'; btn.style.padding = '6px 12px'; btn.style.whiteSpace = 'nowrap';
+    btn.textContent = 'THREAD 0' + (index + 1);
+    btn.onclick = () => { document.getElementById('chat-box').innerHTML = htmlBlock; };
+    pBox.appendChild(btn);
+  });
+}
+
+function addChatBubble(role, message) {
+  const box = document.getElementById('chat-box');
+  // Clear empty state prompt if present
+  if(box.innerHTML.includes('interaction history') || box.innerHTML.includes('secure neural thread')) box.innerHTML = '';
+  
+  const b = document.createElement('div');
+  b.className = 'bubble ' + role;
+  b.textContent = message;
+  box.appendChild(b);
+  box.scrollTop = box.scrollHeight;
+}
+
+function clearSession() {
+  document.getElementById('chat-box').innerHTML = `<div style="color:var(--dim); text-align:center; font-size:12px; margin-top:40px;">Session wiped. Memory reset.</div>`;
+  document.getElementById('past-chats').innerHTML = '';
+  archivedSessions = [];
+  speakNative("Total session history purged from temporary cache.");
+}
+
+
+// --- Login Flow Enhancements ---
+function requestOtp() {
+  const nInput = document.getElementById('fullname').value.trim();
+  const pInput = document.getElementById('phone').value.trim();
+  const errText = document.getElementById('phone-err');
+  const btn = document.getElementById('btn-send-otp');
+  
+  if(!nInput) { 
+    errText.textContent = "Please enter your name"; errText.style.opacity = '1'; 
+    speakNative("You forgot to enter your name. Please identify yourself.");
+    return; 
+  }
+  if(pInput.length < 5) { 
+    errText.textContent = "Please enter a valid phone number"; errText.style.opacity = '1'; 
+    speakNative("You are making a mistake. The phone number provided is biologically or mathematically invalid.");
+    return; 
+  }
+  
+  errText.style.opacity = '0';
+  btn.textContent = 'SENDING...';
+  btn.disabled = true;
+  
+  setTimeout(() => {
+    document.getElementById('phone-step').style.display = 'none';
+    document.getElementById('otp-step').style.display = 'block';
+  }, 1200);
+}
+
+function verifyOtpLogin() {
+  const oInput = document.getElementById('otp').value.trim();
+  const errText = document.getElementById('otp-err');
+  if(oInput.length < 6) { 
+    errText.style.opacity = '1'; 
+    speakNative("Security clearance rejected. That is not the correct OTP. Please try again.");
+    return; 
+  }
+  errText.style.opacity = '0';
+  mockLogin(document.getElementById('fullname').value.trim());
+}
+
+function logOut() {
+  speakNative("Neural system disconnecting. Returning to secure entry gateway.");
+  document.getElementById('core-system').style.display = 'none';
+  const gate = document.getElementById('auth-gateway');
+  gate.style.display = 'flex';
+  gate.style.opacity = '1';
+  gate.style.transform = 'scale(1)';
+  document.querySelector('.bg-grid').style.opacity = '1';
+}
+
+function mockLogin(username = null) {
+  const gateway = document.getElementById('auth-gateway');
+  const core = document.getElementById('core-system');
+  const bgGrid = document.querySelector('.bg-grid');
+  
+  if(username) { document.getElementById('user-pill').textContent = username; }
+  else { document.getElementById('user-pill').textContent = ""; }
+
+  gateway.style.transform = "scale(1.05)"; gateway.style.opacity = "0"; bgGrid.style.opacity = "0.2";
+  
+  setTimeout(() => {
+    gateway.style.display = "none";
+    core.style.display = "flex";
+    core.style.opacity = "1";
+    
+    setTimeout(() => {
+      const greeting = "Hello " + (username || "User") + ". I am the Codevora Assistant.";
+      addChatBubble('ai', greeting);
+      
+      const orb = document.getElementById('voice-orb');
+      orb.style.boxShadow = "0 0 100px var(--cyan)";
+      setTimeout(() => orb.style.boxShadow = "", 1000);
+
+      try {
+        const u = new SpeechSynthesisUtterance(greeting);
+        const voices = window.speechSynthesis.getVoices();
+        u.voice = voices.find(v => v.name.includes("Google") || v.name.includes("Zira")) || voices[0];
+        window.speechSynthesis.speak(u);
+      } catch(e) {}
+    }, 1200);
+  }, 600);
+}
+
+// --- Core OS Engine Logic ---
+const API = 'http://localhost:8000';
+let mediaRec = null, isContinuous = false;
+const orb = document.getElementById('voice-orb');
+
+async function checkBackend() {
+  try {
+    const r = await fetch(API + '/health', {signal: AbortSignal.timeout(2000)});
+    if(r.ok) {
+      document.getElementById('b-text').textContent = '';
+      return;
+    }
+  } catch {}
+  document.getElementById('b-text').textContent = '';
+}
+setInterval(checkBackend, 10000); checkBackend();
+
+function setOrbState(state) {
+  if(!orb) return;
+  orb.className = 'orb ' + state;
+}
+
+function handleAudioEnd() {
+  if(isContinuous) { startContinuousListening(); }
+  else { setOrbState(''); }
+}
+
+function speakNative(text) {
+  if(isMuted) return;
+  setOrbState('speaking');
+  const utterance = new SpeechSynthesisUtterance(text);
+  const voices = window.speechSynthesis.getVoices();
+  
+  // High-Priority Dialect Mapping
+  let langCode = 'en-US';
+  if(targetLang === 'Bhojpuri' || targetLang === 'Hindi') langCode = 'hi-IN';
+  else if(targetLang === 'Nepali') langCode = 'ne-NP';
+  else if(targetLang === 'Bengali') langCode = 'bn-IN';
+  else if(targetLang === 'Punjabi') langCode = 'pa-IN';
+  else if(targetLang === 'English') langCode = 'en-US';
+
+  const matchedVoice = voices.find(v => v.lang.includes(langCode));
+  utterance.voice = matchedVoice || voices.find(v => v.name.includes("Google") || v.name.includes("Zira")) || voices[0];
+  
+  utterance.lang = langCode;
+  utterance.pitch = 1.0; utterance.rate = 1.1; 
+  
+  utterance.onend = handleAudioEnd;
+  window.speechSynthesis.speak(utterance);
+}
+
+function generateLocalResponse(input) {
+  const t = input.toLowerCase();
+  const userName = document.getElementById('fullname').value.trim() || 'User';
+  if(t.includes("hello") || t.includes("hi")) return "Hello " + userName + "!";
+  if(t.includes("time")) return "The time is " + new Date().toLocaleTimeString();
+  if(t.includes("open chrome")) { window.open("https://google.com","_blank"); return "Opening Google Chrome now."; }
+  if(t.includes("youtube")) { window.open("https://youtube.com","_blank"); return "Accessing YouTube servers."; }
+  
+  if(!activeApiKey) {
+     return "Neural Core inactive. Please provide an API key in the top-right Settings menu, or connect the Python backend.";
+  }
+  return "Query routing failed. Please check network logs.";
+}
+
+// Master Neural Router
+async function routeQuery(text) {
+  // 1. Direct Cloud API usage (if user gave a key)
+  if (activeApiKey) {
+    try {
+       if (activeProvider === "Gemini") {
+          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${activeApiKey}`, {
+             method: 'POST', headers: {'Content-Type': 'application/json'},
+             body: JSON.stringify({ contents: [{ parts: [{text: text}] }] })
+          });
+          const data = await res.json();
+          return data.candidates[0].content.parts[0].text;
+       }
+       if (activeProvider === "Open AI") {
+          const res = await fetch(`https://api.openai.com/v1/chat/completions`, {
+             method: 'POST', headers: {'Content-Type': 'application/json', 'Authorization': `Bearer ${activeApiKey}`},
+             body: JSON.stringify({ model: 'gpt-4o', messages: [{role:'user', content:text}] })
+          });
+          const data = await res.json();
+          return data.choices[0].message.content;
+       }
+    } catch(err) {
+       console.log(err);
+       return "Provider API rejected the connection. Check console or API key validity.";
+    }
+  }
+
+  // 2. Python Backend usage
+  try {
+      const cr = await fetch(API+'/api/chat/', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:text, include_memory:true}) });
+      if(!cr.ok) throw new Error();
+      const cd = await cr.json();
+      return cd.reply || 'No valid response.';
+  } catch(e) { 
+      // 3. Fallback to hardcoded mock
+      return generateLocalResponse(text); 
+  }
+}
+
+// Text Input Command Handler
+async function handleTextInput() {
+  const inputEl = document.getElementById('term-input');
+  const text = inputEl.value.trim();
+  if(!text) return;
+  
+  inputEl.value = '';
+  addChatBubble('user', text);
+  setOrbState('thinking');
+  
+  let reply = await routeQuery(text);
+  
+  addChatBubble('ai', reply);
+  speakNative(reply);
+}
+
+// Central Screen Input Handler
+function handleCenterInput() {
+  const cInp = document.getElementById('center-input');
+  if(!cInp.value.trim()) return;
+  document.getElementById('term-input').value = cInp.value;
+  cInp.value = '';
+  
+  if(!document.getElementById('sidebar-terminal').classList.contains('open')) {
+    toggleSidebar();
+  }
+  handleTextInput();
+}
+
+function handleFileSelect(id) {
+   const input = document.getElementById(id);
+   if(input.files.length > 0) {
+      const fileName = input.files[0].name;
+      const type = id.includes('photo') ? 'Image' : 'File';
+      
+      toggleSidebar();
+      addChatBubble('user', `[System Upload]: Attaching ${type} - ${fileName}`);
+      speakNative(`${type} received. Processing document inside neural data buffer.`);
+      
+      setTimeout(() => {
+         addChatBubble('ai', `I have analyzed the ${type.toLowerCase()} '${fileName}'. How would you like me to process this data?`);
+      }, 1000);
+   }
+}
+
+function openTool(name) {
+   const dash = document.getElementById('dashboard-view');
+   const ws = document.getElementById('workspace-view');
+   const title = document.getElementById('ws-title');
+   const sub = document.getElementById('ws-subtitle');
+   const content = document.getElementById('ws-content');
+   
+   dash.style.display = 'none';
+   ws.style.display = 'flex';
+   title.textContent = `AI ${name.toUpperCase()} WORKSPACE`;
+   sub.textContent = `Synchronizing Codevora Pro neural buffers for ${name}.`;
+   
+   speakNative(`Engaging ${name} full-scale workspace.`);
+   
+   let html = "";
+   // Domain-Specific Workspace Content Architecture
+   if(name === 'Music') {
+      html = `
+        <div style="flex:1; background:var(--box-bg); border:1px solid var(--box-border); border-radius:15px; padding:30px; display:flex; flex-direction:column; gap:20px;">
+           <div style="height:150px; background:linear-gradient(90deg, var(--cyan) 0%, var(--violet) 100%); border-radius:10px; opacity:0.3; display:flex; align-items:center; justify-content:center; overflow:hidden;">
+              <div id="wave-visual" style="display:flex; gap:4px; height:60px; align-items:center;">
+                 ${Array(20).fill('<div style="width:4px; height:20px; background:white; border-radius:4px;"></div>').join('')}
+              </div>
+           </div>
+           <input type="text" id="ws-music-prompt" placeholder="Describe the melody to generate..." class="input-field" style="max-width:100%" />
+           <div style="display:flex; gap:10px;">
+             <button onclick="playNeuralMusic('workspace')" class="btn-action" style="flex:1">PREVIEW MELODY</button>
+             <button onclick="downloadMock('Music', 'Custom_Wave')" class="btn-action" style="background:var(--violet); color:#fff; border:none; flex:1">EXPORT AS .WAV</button>
+           </div>
+        </div>
+      `;
+   } else if(name === 'Docs' || name === 'Chat') {
+      html = `
+        <div style="flex:1; display:flex; flex-direction:column; gap:15px;">
+           <div contenteditable="true" style="flex:1; background:#fff; color:#000; border-radius:8px; padding:40px; font-family:serif; font-size:18px; outline:none; min-height:400px; box-shadow:0 10px 30px rgba(0,0,0,0.5)">
+             Start typing your neural document here...
+           </div>
+           <div style="display:flex; gap:10px;">
+             <button onclick="downloadMock('${name}', 'Workspace_Doc')" class="btn-action">SAVE TO LOCAL DRIVE</button>
+             <button class="btn-action" style="background:var(--cyan); color:#000; border:none">AI AUTO-COMPLETE</button>
+           </div>
+        </div>
+      `;
+   } else {
+      html = `
+        <div style="flex:1; background:var(--box-bg); border:1px solid var(--box-border); border-radius:15px; padding:60px; text-align:center;">
+           <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--cyan); opacity:0.3; margin-bottom:20px;"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+           <h3 style="color:var(--txt)">DEDICATED ${name.toUpperCase()} GRID LOADED</h3>
+           <p style="color:var(--dim); font-size:14px; margin-top:10px;">Full feature set for the ${name} engine is currently initializing. <br/> Use the terminal for direct command override.</p>
+           <button class="btn-action" style="margin-top:20px; max-width:300px" onclick="downloadMock('${name}', 'Project_Seed')">DOWNLOAD PROJECT SEED</button>
+        </div>
+      `;
+   }
+   
+   content.innerHTML = html;
+}
+
+function closeWorkspace() {
+   speakNative("Closing neural workspace. Returning to Dashboard.");
+   document.getElementById('workspace-view').style.display = 'none';
+   document.getElementById('dashboard-view').style.display = 'flex';
+}
+
+function generateMusicFromPrompt() {
+  const p = document.getElementById('music-prompt').value.trim();
+  if(!p) return;
+  document.getElementById('tool-modal').style.display = 'none';
+  if(!document.getElementById('sidebar-terminal').classList.contains('open')) toggleSidebar();
+  
+  addChatBubble('user', `AI Music Request: ${p}`);
+  speakNative(`Neural music prompt received: ${p}. Fabricating high-fidelity audio patterns.`);
+  
+  setTimeout(() => {
+    addChatBubble('ai', `I have composed a custom neural track inspired by "${p}". Loading preview into local buffer.`);
+    playNeuralMusic(p);
+  }, 1000);
+}
+
+function playNeuralMusic(style) {
+   speakNative(`Generating neural audio patterns for ${style}. Initializing Codevora Synth Engine.`);
+   
+   const ctx = new (window.AudioContext || window.webkitAudioContext)();
+   const melody = [261.63, 329.63, 392.00, 523.25, 440.00]; // C Major feel
+   
+   melody.forEach((freq, i) => {
+      setTimeout(() => {
+         const osc = ctx.createOscillator();
+         const gain = ctx.createGain();
+         osc.type = i % 2 === 0 ? 'sine' : 'square';
+         osc.frequency.setValueAtTime(freq, ctx.currentTime);
+         gain.gain.setValueAtTime(0.1, ctx.currentTime);
+         gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.5);
+         osc.connect(gain);
+         gain.connect(ctx.destination);
+         osc.start(); osc.stop(ctx.currentTime + 0.5);
+      }, i * 200);
+   });
+}
+
+function downloadMock(tool, tName) {
+   document.getElementById('tool-modal').style.display = 'none';
+   if(!document.getElementById('sidebar-terminal').classList.contains('open')) toggleSidebar();
+   
+   addChatBubble('user', `[System Internal]: Requesting ${tool} generation for "${tName}"`);
+   speakNative(`Verifying neural license. Compiling your high-tier ${tool} document now.`);
+   
+   setTimeout(() => {
+      addChatBubble('ai', `Codevora Engine has finalized the ${tool} asset based on the "${tName}" layout. Initiating data transmission to your local drive.`);
+      
+      // REAL MOCK DOWNLOAD LOGIC
+      const content = `CODEVORA-OS GENERATED CONTENT\nTool: ${tool}\nTemplate: ${tName}\nTimestamp: ${new Date().toLocaleString()}\nStatus: Neural Sync Complete\n\nThis is a professional AI-generated ${tool} document for your ${tName} project. Thank you for using Codevora Pro.`;
+      const blob = new Blob([content], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Codevora_${tool}_${tName.replace(/\s+/g, '_')}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      speakNative("Data transmission successful. Template received.");
+   }, 2000);
+}
+
+// Voice Command Handler
+function startContinuousListening() {
+  if(!isContinuous) return;
+  setOrbState('listening');
+  
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SpeechRecognition) {
+     addChatBubble('ai', "Neural dictation failed: Speech Recognition API not supported in this environment.");
+     isContinuous = false; setOrbState(''); return;
+  }
+
+  const localRec = new SpeechRecognition();
+  localRec.continuous = false; localRec.lang = 'en-US';
+  localRec.interimResults = false;
+
+  localRec.onend = () => { 
+    if(isContinuous && orb.className.includes('listening')) {
+       startContinuousListening(); 
+    }
+  };
+
+  localRec.onerror = (e) => {
+    console.error("Speech Error:", e.error);
+    if(e.error === 'not-allowed') {
+       addChatBubble('ai', "Neural link blocked: Microphone permission required.");
+       isContinuous = false; setOrbState('');
+    } else if(isContinuous) {
+       startContinuousListening(); 
+    }
+  };
+
+  localRec.onresult = async (event) => {
+      const text = event.results[0][0].transcript;
+      if (!text) return;
+      
+      addChatBubble('user', text);
+      setOrbState('thinking');
+      
+      try {
+        let reply = await routeQuery(text);
+        addChatBubble('ai', reply);
+        speakNative(reply);
+      } catch(err) {
+        addChatBubble('ai', "Neural link interrupted. Processing locally.");
+      }
+  };
+
+  try {
+     localRec.start();
+     initAudioVisualizer(); // Pulse eyes to user voice
+  } catch(e) {
+     console.warn("Rec restart attempt failed.");
+  }
+}
+
+let micStream;
+let audioAnalzyer;
+let audioCtx;
+
+async function initAudioVisualizer() {
+  if(!isContinuous) return;
+  if(micStream) return;
+  try {
+     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+     micStream = stream;
+     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+     const source = audioCtx.createMediaStreamSource(stream);
+     audioAnalzyer = audioCtx.createAnalyser();
+     audioAnalzyer.fftSize = 64;
+     source.connect(audioAnalzyer);
+     pulseEyes();
+  } catch(e) { console.warn("Mic link failed:", e); }
+}
+
+function pulseEyes() {
+  if(!isContinuous && !orb.className.includes('speaking')) {
+     if(micStream) micStream.getTracks().forEach(t => t.stop());
+     micStream = null; return;
+  }
+  if(audioAnalzyer) {
+     const data = new Uint8Array(audioAnalzyer.frequencyBinCount);
+     audioAnalzyer.getByteFrequencyData(data);
+     let avg = data.reduce((a,b) => a+b) / data.length;
+     let scale = 1 + (avg / 160);
+     document.querySelectorAll('.baby-eye').forEach(eye => {
+        eye.style.transform = `scale(${scale})`;
+     });
+  }
+  requestAnimationFrame(pulseEyes);
+}
+
+async function toggleVoice() {
+  if (isContinuous) { 
+    isContinuous = false; 
+    setOrbState(''); 
+    speakNative("Voice dictation offline.");
+    return; 
+  }
+  isContinuous = true; 
+  speakNative("Neural listening engaged. Ready for commands.");
+  startContinuousListening();
+}
+// --- AI BABY EYE TRACKING (NEURAL GAZE) ---
+window.addEventListener('mousemove', (e) => {
+   const pupils = document.querySelectorAll('.pupil');
+   const mainOrb = document.getElementById('voice-orb');
+   if(!mainOrb) return;
+   
+   // Pause tracking if AI is doing "Neural Scan" animations
+   const isAnimating = mainOrb.classList.contains('thinking') || 
+                       mainOrb.classList.contains('listening') || 
+                       mainOrb.classList.contains('speaking');
+   
+   if(isAnimating) return;
+
+   pupils.forEach(p => {
+      const rect = p.parentElement.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      
+      const angle = Math.atan2(e.clientX - centerX, e.clientY - centerY);
+      const dist = 8; // Max orbital movement
+      const tx = Math.sin(angle) * dist;
+      const ty = Math.cos(angle) * dist;
+      
+      p.style.transform = `translate(${tx}px, ${ty}px)`;
+   });
+});
+
+</script>
+</body>
+</html>

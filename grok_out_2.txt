@@ -1,0 +1,5 @@
+Sending request to x.ai...
+RESPONSE: {
+  "code": "Client specified an invalid argument",
+  "error": "Model not found: grok-2"
+}

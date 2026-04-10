@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JARVIS-OMEGA | Core Interface</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React and ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <!-- Babel for in-browser JSX compilation -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body class="bg-slate-950 m-0 p-0 overflow-hidden text-cyan-300">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState } = React;
+
+        const JarvisHome = () => {
+            const [isActivated, setIsActivated] = useState(false);
+
+            return (
+                <div className="min-h-screen bg-slate-950 text-cyan-300 font-sans overflow-hidden">
+                    {/* Navigation Bar */}
+                    <nav className="flex justify-between items-center px-6 py-5 md:px-12 border-b border-cyan-500/20 backdrop-blur-md bg-slate-900/60 relative z-20 shadow-lg">
+                        <div className="flex items-center gap-3">
+                            <div className="w-3 h-3 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_10px_rgba(0,255,204,1)]"></div>
+                            <div className="text-2xl font-black tracking-widest bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-500 leading-none">
+                                JARVIS<span className="text-white">-OMEGA</span>
+                            </div>
+                        </div>
+                        <div className="hidden md:flex gap-8 text-xs font-bold tracking-[0.2em] text-cyan-500/70">
+                            <button className="hover:text-cyan-300 transition-colors">DASHBOARD</button>
+                            <button className="hover:text-cyan-300 transition-colors">MODULES</button>
+                            <button className="hover:text-cyan-300 transition-colors">SETTINGS</button>
+                        </div>
+                        <button className="md:hidden text-cyan-400 text-2xl">☰</button>
+                    </nav>
+
+                    {/* Main Content Interface */}
+                    <main className="relative flex flex-col items-center justify-center min-h-[calc(100vh-80px)] z-10 px-4 py-12">
+                        
+                        {/* Background Grid Pattern */}
+                        <div className="absolute inset-0 z-0 opacity-10" style={{ backgroundImage: 'radial-gradient(#00ffcc 1.5px, transparent 1.5px)', backgroundSize: '40px 40px' }}></div>
+                        
+                        {/* Glowing Scanning Line effect */}
+                        <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-cyan-500/10 to-transparent blur-xl animate-[scan_5s_ease-in-out_infinite]"></div>
+
+                        {/* Animated Glowing Title */}
+                        <div className="relative z-10 text-center mb-10 md:mb-16 mt-[-5vh]">
+                            <h1 className="text-4xl md:text-7xl font-extrabold tracking-tighter mb-4">
+                                <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-blue-400 to-cyan-500 drop-shadow-[0_0_25px_rgba(0,255,204,0.6)]">
+                                    SYSTEM ONLINE
+                                </span>
+                            </h1>
+                            <p className="text-slate-400 text-sm md:text-lg font-light tracking-widest max-w-2xl mx-auto uppercase">
+                                Autonomous Artificial Intelligence Matrix Engaged.
+                            </p>
+                        </div>
+
+                        {/* Rotating AI Core Animation */}
+                        <div className="relative flex items-center justify-center w-64 h-64 md:w-80 md:h-80 mb-16">
+                            {/* Ring 1 - Outer */}
+                            <div className="absolute w-full h-full rounded-full border border-cyan-500/20 border-t-cyan-400 animate-[spin_5s_linear_infinite] shadow-[inset_0_0_20px_rgba(0,255,204,0.1)]"></div>
+                            {/* Ring 2 - Outer Reverse */}
+                            <div className="absolute w-[90%] h-[90%] rounded-full border border-blue-500/30 border-b-blue-400 animate-[spin_7s_linear_infinite_reverse]"></div>
+                            
+                            {/* Ring 3 - Dashed Middle */}
+                            <div className="absolute w-[70%] h-[70%] rounded-full border-2 border-dashed border-cyan-300/40 animate-[spin_10s_linear_infinite]"></div>
+                            {/* Ring 4 - Inner Solid */}
+                            <div className="absolute w-[60%] h-[60%] rounded-full border-t-4 border-l-2 border-cyan-400/60 animate-[spin_3s_linear_infinite_reverse]"></div>
+                            
+                            {/* Inner Core Hub */}
+                            <div className={`w-24 h-24 md:w-32 md:h-32 bg-gradient-to-br from-cyan-500 to-blue-700 rounded-full flex items-center justify-center shadow-[0_0_60px_rgba(0,255,204,0.5)] transition-all duration-1000 ease-out ${isActivated ? 'scale-125 shadow-[0_0_120px_rgba(0,255,204,1)] bg-gradient-to-br from-white to-cyan-400' : 'scale-100'}`}>
+                                <div className="w-16 h-16 md:w-20 md:h-20 bg-slate-900 rounded-full flex items-center justify-center overflow-hidden">
+                                    <div className={`w-10 h-10 md:w-12 md:h-12 rounded-full bg-cyan-400 blur-[8px] transition-all duration-300 ${isActivated ? 'animate-ping opacity-100' : 'animate-pulse opacity-70'}`}></div>
+                                </div>
+                            </div>
+
+                            {/* Surrounding Data Particles */}
+                            <div className={`absolute w-3 h-3 bg-cyan-300 rounded-full blur-[2px] top-[10%] left-[20%] animate-ping ${isActivated ? 'block' : 'hidden'}`}></div>
+                            <div className={`absolute w-2 h-2 bg-blue-400 rounded-full blur-[1px] bottom-[15%] right-[25%] animate-ping ${isActivated ? 'block' : 'hidden'}`} style={{animationDelay: '0.5s'}}></div>
+                        </div>
+
+                        {/* Activate Jarvis Button */}
+                        <button 
+                            onClick={() => setIsActivated(!isActivated)}
+                            className="relative z-20 group overflow-hidden px-10 py-4 rounded-full bg-slate-900 border border-cyan-500/50 hover:border-cyan-400 hover:shadow-[0_0_40px_rgba(0,255,204,0.5)] transition-all duration-300 backdrop-blur-sm"
+                        >
+                            <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-cyan-600/20 to-blue-600/20 group-hover:opacity-100 opacity-0 transition-opacity duration-300"></span>
+                            <span className="relative flex items-center justify-center gap-3 text-cyan-50 font-bold tracking-[0.2em] text-sm">
+                                {isActivated ? (
+                                    <React.Fragment><span className="w-2 h-2 bg-white rounded-full animate-pulse shadow-[0_0_10px_white]"></span> DIRECTIVE ACCEPTED</React.Fragment>
+                                ) : (
+                                    'ACTIVATE JARVIS'
+                                )}
+                            </span>
+                            <div className="absolute bottom-0 left-0 h-[3px] w-full bg-gradient-to-r from-cyan-400 to-blue-500 transform scale-x-0 group-hover:scale-x-100 transition-transform duration-500 origin-left"></div>
+                        </button>
+                    </main>
+                    <style>{`
+                        @keyframes scan {
+                            0% { transform: translateY(-100%); opacity: 0; }
+                            50% { opacity: 1; }
+                            100% { transform: translateY(100vh); opacity: 0; }
+                        }
+                    `}</style>
+                </div>
+            );
+        };
+
+        const App = () => {
+            return (
+                <div className="app-container">
+                    <JarvisHome />
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

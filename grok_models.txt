@@ -1,0 +1,5 @@
+Fetching models from x.ai...
+RESPONSE: {
+  "code": "Client specified an invalid argument",
+  "error": "Incorrect API key provided: kY***YO. You can obtain an API key from https://console.x.ai."
+}
