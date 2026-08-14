@@ -2109,6 +2109,7 @@ function startTextBoxDraw(event) {
     state.focusTextId = item.id;
     state.textBoxMode = false;
     render();
+    pushCollabState();
   };
 
   document.addEventListener("pointermove", draw);
@@ -4526,6 +4527,7 @@ function setTransitionDuration(value) {
   page.transition = { name: current.name || "None", duration: Number(value), direction: current.direction || "right" };
   state.tool = "animate";
   render();
+  pushCollabState();
 }
 
 function setTransitionDirection(direction) {
