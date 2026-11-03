@@ -1,7 +1,13 @@
 import { useState, useEffect } from 'react';
 
 export const useTranslation = () => {
-  const [language, setLanguage] = useState(() => localStorage.getItem('codevora_lang') || 'en');
+  const [language, setLanguage] = useState(() => {
+    try {
+      return localStorage.getItem('codevora_lang') || 'en';
+    } catch {
+      return 'en';
+    }
+  });
 
   const t = (key: string) => {
     const translations: Record<string, Record<string, string>> = {

@@ -4,10 +4,46 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>codestrom</title>
+    <title>Codevora AI</title>
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0b0b0d" media="(prefers-color-scheme: dark)" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Codevora AI" />
+    <script>
+      (function () {
+        try {
+          var mode = localStorage.getItem('codestrom-theme') || 'system';
+          var dark = mode === 'dark' || (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          if (dark) document.documentElement.classList.add('dark');
+        } catch (e) {}
+      })();
+    </script>
+    <script>
+      window.addEventListener('error', function (e) {
+        try {
+          fetch('/api/log-error', { method: 'POST', body: (e.message || '') + '\n' + (e.error ? e.error.stack : '') }).catch(function () {});
+        } catch (_) {}
+      });
+      window.addEventListener('unhandledrejection', function (e) {
+        try {
+          var reason = e && e.reason;
+          fetch('/api/log-error', { method: 'POST', body: 'Promise Rejection: ' + (reason && reason.stack ? reason.stack : reason) }).catch(function () {});
+        } catch (_) {}
+      });
+    </script>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
+        });
+      }
+    </script>
   </body>
 </html>

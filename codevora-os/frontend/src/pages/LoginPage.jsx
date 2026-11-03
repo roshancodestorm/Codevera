@@ -18,7 +18,7 @@ export default function LoginPage({ onBack, onLoginSuccess }) {
     <div className="min-h-screen bg-[#02050a] flex items-center justify-center p-6 relative overflow-hidden">
       {/* Background Decor */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-cyan-600/10 rounded-full blur-[150px]" />
-      <div className="absolute inset-0 bg-[radial-gradient(rgba(0,245,255,0.05)_1px,transparent_1px)] bg-[size:20px:20px]" />
+      <div className="absolute inset-0 bg-[radial-gradient(rgba(0,245,255,0.05)_1px,transparent_1px)] bg-[size:20px_20px]" />
 
       <motion.div 
         initial={{ opacity: 0, scale: 0.9, y: 20 }}

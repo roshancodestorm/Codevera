@@ -1,4 +1,5 @@
-﻿const icons = {
+﻿try { if (typeof crypto !== "undefined" && typeof crypto.randomUUID !== "function") { Object.defineProperty(crypto, "randomUUID", { value: function () { return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) { var r = (Math.random() * 16) | 0; return (c === "x" ? r : (r & 0x3) | 0x8).toString(16); }); }, configurable: true, writable: true }); } } catch (e) {}
+const icons = {
   menu: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>',
   folder: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h7l2 3h9v9H3z"/></svg>',
   layout: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10"/></svg>',
@@ -742,11 +743,50 @@ let state = {
   marketplaceCategory: null,
   marketplaceSort: "newest",
   brandKit: loadBrandKit(),
+  cloudToken: localStorage.getItem("studio-cloud-token") || "",
+  cloudUser: null,
+  cloudProjects: null,
+  cloudProjectId: "",
+  cloudStatus: "",
+  cloudBusy: false,
+  authModalOpen: false,
+  authMode: "login",
+  authName: "",
+  authPassword: "",
+  authStatus: "",
+  restylePreset: "modern",
+  designKind: "presentation",
+  deckViewMode: "editor",
+  activeThemeId: "",
+  deckChatOpen: false,
+  deckChatMessages: [],
+  deckChatBusy: false,
+  deckChatStatus: "",
+  importKind: "url",
+  importUrl: "",
+  importText: "",
+  importFileName: "",
+  importSourceText: "",
+  importSourceTitle: "",
+  importBusy: false,
+  importStatus: "",
+  analyticsBusy: false,
+  analyticsData: null,
+  analyticsStatus: "",
+  viewerShareId: (location.pathname.match(/^\/p\/([a-f0-9]{16})/i) || [])[1] || "",
+  viewerMode: false,
 };
 
-applyTemplate("presentation-1", false, false);
+if (state.viewerShareId) {
+  state.viewerMode = true;
+  bootViewer(state.viewerShareId);
+} else {
+  applyTemplate("presentation-1", false, false);
+  initCloudSession();
+}
 
 function render() {
+  if (state.viewerMode) return renderViewer();
   app.innerHTML = `
     <main class="studio">
       <header class="topbar">
@@ -756,6 +796,9 @@ function render() {
           <input value="${escapeAttr(state.projectName)}" data-project-name aria-label="Design name">
         </div>
         <div class="top-actions">
+          <button class="btn ghost account-btn" data-action="account">${state.cloudUser ? escapeHtml(state.cloudUser.name.charAt(0).toUpperCase()) : "Sign in"}</button>
+          ${state.designKind !== "presentation" ? `<button class="btn ghost" data-action="toggle-flow-view">${state.deckViewMode === "cards" ? "Editor" : "Cards"}</button>` : ""}
+          <button class="btn ghost" data-action="present">Present</button>
           <button class="btn ghost" data-action="preview">Preview</button>
           <button class="btn" data-action="beautify">${icons.spark} Magic layout</button>
           <div class="download-wrap">
@@ -771,15 +814,90 @@ function render() {
       </section>
     </main>
     ${state.showModelModal ? renderModelModal() : ""}
+    ${state.authModalOpen ? renderAccountModal() : ""}
   `;
   bindEvents();
   restorePanelScroll();
 }
 
+function renderViewer() {
+  const page = state.pages[state.pageIndex];
+  const scale = Math.min((window.innerWidth - 64) / 960, (window.innerHeight - 210) / 540);
+  const error = state.cloudStatus ? `<div class="viewer-error">${escapeHtml(state.cloudStatus)}</div>` : "";
+  const dots = state.pages.map((_, index) => `<button class="viewer-dot ${index === state.pageIndex ? "active" : ""}" data-page="${index}" title="Slide ${index + 1}"></button>`).join("");
+  app.innerHTML = `
+    <main class="viewer">
+      <header class="viewer-top">
+        <div class="brand"><span class="brand-mark">C</span><span>Codestream</span></div>
+        <strong class="viewer-title">${escapeHtml(state.projectName)}</strong>
+        <span class="viewer-count">${state.pageIndex + 1} / ${state.pages.length}</span>
+      </header>
+      ${error}
+      <div class="viewer-stage">
+        ${page ? `<div class="slide viewer-slide" style="${pageBackground(page)};transform:scale(${Math.max(0.2, scale)});transform-origin:center;">${page.elements.map(renderElement).join("")}</div>` : `<div class="viewer-empty">No slides in this presentation.</div>`}
+      </div>
+      <footer class="viewer-footer">
+        <button class="viewer-nav" data-viewer-nav="prev" ${state.pages.length ? "" : "disabled"}>‹</button>
+        <div class="viewer-dots">${dots}</div>
+        <button class="viewer-nav" data-viewer-nav="next" ${state.pages.length ? "" : "disabled"}>›</button>
+      </footer>
+    </main>`;
+  bindEvents();
+}
+
+async function bootViewer(shareId) {
+  try {
+    const res = await fetch(`/api/shared/${shareId}`);
+    const data = await res.json().catch(() => ({}));
+    if (data.ok && data.project && Array.isArray(data.project.pages)) {
+      state.projectName = data.project.name || "Shared presentation";
+      state.pages = data.project.pages;
+      state.pageIndex = 0;
+    } else {
+      state.cloudStatus = "Shared presentation not found.";
+    }
+  } catch {
+    state.cloudStatus = "Cloud server unreachable — this view needs the Studio server (node server.js).";
+  }
+  render();
+}
+
 function renderMainArea() {
   if (state.tool === "templates") return renderTemplateBrowser();
   if (state.tool === "projects") return renderProjectsBrowser();
+  if (state.deckViewMode === "cards" && state.designKind !== "presentation") return renderFlowPreview();
   return renderEditor();
+}
+
+// Gamma-style vertical flow of variable-height cards / continuous document.
+function renderFlowPreview() {
+  const kind = state.designKind;
+  const spec = formatSpec(kind);
+  const availableWidth = Math.max(480, (window.innerWidth || 1400) - 460);
+  const scale = Math.min(1.0, availableWidth / spec.w);
+  const cards = state.pages.map((page, index) => {
+    if (kind === "social") {
+      const size = Math.min(560, window.innerHeight - 220);
+      const s = size / spec.w;
+      return `<div class="flow-card social" data-page-jump="${index}">
+        <div class="slide" style="width:${spec.w}px;height:${spec.h}px;transform:scale(${s});transform-origin:top left;${pageBackground(page)}">${page.elements.map(renderElement).join("")}</div>
+        <span class="flow-card-label">${index + 1}</span>
+      </div>`;
+    }
+    const h = kind === "presentation" ? spec.h : estimatePageHeight(page, kind);
+    return `<div class="flow-card ${kind}" data-page-jump="${index}">
+      <div class="slide" style="width:${spec.w}px;height:${h}px;transform:scale(${scale});transform-origin:top left;${pageBackground(page)}">${page.elements.map(renderElement).join("")}</div>
+      <span class="flow-card-label">${index + 1}${kind !== "presentation" && h !== spec.h ? ` · ${Math.round(h / 54)}` : ""}</span>
+    </div>`;
+  }).join("");
+  return `<section class="main-area flow-area">
+    <div class="flow-toolbar">
+      <strong>${spec.icon} ${spec.label} view</strong>
+      <span>${state.pages.length} ${kind === "document" ? "sections" : "pages"} · click karo edit karne ke liye</span>
+      <button class="mini-action" data-action="toggle-flow-view">Editor me wapas</button>
+    </div>
+    <div class="flow-scroll ${kind}">${cards || `<div class="viewer-empty">Koi content nahi.</div>`}</div>
+  </section>`;
 }
 
 function renderRail() {
@@ -787,6 +905,8 @@ function renderRail() {
     ["templates", "Templates", icons.layout],
     ["ppt", "PPT Build", icons.layers],
     ["ai-ppt", "AI PPT", icons.spark],
+    ["chat", "AI Chat", icons.spark],
+    ["themes", "Themes", icons.palette],
     ["models", "Model API", icons.link],
     ["text", "Text", icons.text],
     ["photos", "Photos", icons.image],
@@ -808,6 +928,8 @@ function renderPanel() {
   if (state.tool === "templates") return renderTemplatePanel();
   if (state.tool === "ppt") return renderPptPanel();
   if (state.tool === "ai-ppt") return renderAiPptPanel();
+  if (state.tool === "chat") return renderChatPanel();
+  if (state.tool === "themes") return renderThemesPanel();
   if (state.tool === "models") return renderModelPanel();
   if (state.tool === "projects") return renderProjectsPanel();
   if (state.tool === "text") return renderTextPanel();
@@ -828,12 +950,27 @@ function renderSearch(placeholder = "Search") {
 
 function renderSharePanel() {
   if (state.shareView === "powerpoint") return renderPowerPointSharePanel();
+  const stats = state.analyticsData;
+  const visitorLabel = stats ? `${stats.uniqueViewers} viewers` : "0 visitors";
   return `<div class="share-panel">
     <div class="share-head">
       <strong>Share design</strong>
-      <span class="visitor-count">${icons.layout} 0 visitors</span>
-      <button class="icon-btn" title="Share settings" data-share-action="settings">${icons.palette}</button>
+      <span class="visitor-count">${icons.layout} ${escapeHtml(visitorLabel)}</span>
+      <button class="icon-btn" title="Viewer analytics" data-action="open-analytics">📊</button>
     </div>
+    ${stats ? `<div class="analytics-report">
+      <div class="analytics-row"><span>Viewers</span><strong>${stats.uniqueViewers}</strong></div>
+      <div class="analytics-row"><span>Completion</span><strong>${stats.completionRate}%</strong></div>
+      <div class="analytics-row"><span>Total watch time</span><strong>${stats.totalMinutes} min</strong></div>
+      <p class="analytics-label">Avg time per slide / drop-off</p>
+      ${stats.avgSecondsPerPage.map((seconds, index) => `
+        <div class="analytics-slide-row">
+          <small>${index + 1}</small>
+          <div class="analytics-bar-wrap"><div class="analytics-bar" style="width:${Math.min(100, Math.round((seconds / Math.max(5, ...stats.avgSecondsPerPage)) * 100))}%"></div></div>
+          <em>${seconds}s · -${stats.dropOffPercent[index] || 0}%</em>
+        </div>`).join("")}
+    </div>` : ""}
+    ${state.analyticsStatus ? `<p class="share-message">${escapeHtml(state.analyticsStatus)}</p>` : ""}
     <label class="share-people"><span>People with access</span><input data-share-person placeholder="Add people"></label>
     <div class="share-avatar-row"><span class="share-avatar">C</span><button data-share-action="add-person">+</button></div>
     <label class="access-level"><span>Access level</span><select data-share-access>
@@ -859,6 +996,7 @@ function renderSharePanel() {
       <button data-export="pngs">PNG images (ZIP)</button>
       <button data-export="svg">SVG file</button>
       <button data-export="html">HTML file</button>
+      <button data-action="export-doc-html">Document (flowing HTML)</button>
       <button data-export="mp4">MP4 video</button>
       <button data-export="ppt">PPT file</button>
       <button data-export="pdf">PDF file</button>
@@ -940,6 +1078,15 @@ function renderPptPanel() {
       <button class="wide-action" data-action="export-mp4">${icons.download} Export MP4</button>
     </div>
       </div>
+      <div class="panel-heading compact">
+        <div><strong>Restyle deck</strong><span>One-click redesign to a preset look</span></div>
+      </div>
+      <div class="restyle-row">
+        <select data-restyle-preset aria-label="Restyle preset">
+          ${RESTYLE_PRESETS.map((preset) => `<option value="${preset.id}" ${preset.id === (state.restylePreset || "modern") ? "selected" : ""}>${preset.label}</option>`).join("")}
+        </select>
+        <button class="wide-action" data-action="apply-restyle">${icons.spark} Restyle</button>
+      </div>
       <div class="ppt-status-card">
         <strong>${escapeHtml(state.projectName)}</strong>
         <span>${state.pages.length} slides · slide ${state.pageIndex + 1}</span>
@@ -962,39 +1109,118 @@ function renderPptPanel() {
 function renderAiPptPanel() {
   const activeModel = getActiveModel();
   const modelLabel = activeModel ? `${activeModel.displayName || activeModel.modelId} · ${providerLabel(activeModel.provider)}` : "Local fallback generator";
+  const kinds = Object.entries(FORMAT_SPECS);
+  const sourceTabs = [["topic", "Topic"], ["url", "URL"], ["file", "PDF / DOCX"], ["text", "Text"]];
   return `<div class="panel-body">
     <div class="panel-heading">
-      <div><strong>AI PPT Generator</strong><span>Prompt se complete slide deck banaye</span></div>
+      <div><strong>AI PPT Generator</strong><span>Prompt, URL, file ya text — sab se deck banaye</span></div>
     </div>
     <div class="ai-model-card">
       <span><strong>${escapeHtml(modelLabel)}</strong><small>${activeModel ? "Active model se content, structure, aur template direction generate hoga." : "Model API section me model activate karoge to wahi generator use hoga."}</small></span>
       <button class="mini-action" data-tool="models">Model API</button>
     </div>
+    <div class="source-tabs">
+      ${sourceTabs.map(([id, label]) => `<button class="source-tab ${state.importKind === id ? "active" : ""}" data-import-kind="${id}">${label}</button>`).join("")}
+    </div>
+    ${state.importKind === "url" ? `
     <label class="ai-field">
-      <span>Topic</span>
+      <span>Web page URL</span>
+      <input data-import-url placeholder="https://example.com/article" value="${escapeAttr(state.importUrl || "")}">
+    </label>` : ""}
+    ${state.importKind === "file" ? `
+    <label class="ai-field">
+      <span>Upload document</span>
+      <input type="file" data-import-file accept=".pdf,.docx,.txt,.md">
+      <small>PDF aur DOCX browser me hi extract hote hain (scanned PDFs support nahi)</small>
+    </label>` : ""}
+    ${state.importKind === "text" ? `
+    <label class="ai-field">
+      <span>Paste your content</span>
+      <textarea data-import-text rows="6" placeholder="Paste notes, an outline, a blog draft…">${escapeHtml(state.importText || "")}</textarea>
+    </label>` : ""}
+    ${state.importSourceText ? `<div class="import-source-chip">
+      <span>✓ Source: ${escapeHtml(state.importSourceTitle || "imported text")} (${Math.min(9999, state.importSourceText.length)} chars)</span>
+      <button class="mini-action danger" data-action="clear-import-source">Remove</button>
+    </div>` : ""}
+    <label class="ai-field">
+      <span>Topic / angle ${state.importSourceText ? "(optional with source)" : ""}</span>
       <textarea data-ai-topic placeholder="Example: Passive income mobile app pitch deck">${escapeHtml(state.aiTopic || "")}</textarea>
+    </label>
+    <label class="ai-field">
+      <span>Format</span>
+      <select data-design-kind>
+        ${kinds.map(([id, spec]) => `<option value="${id}" ${state.designKind === id ? "selected" : ""}>${spec.icon} ${spec.label}</option>`).join("")}
+      </select>
     </label>
     <div class="ai-grid">
       <label><span>Slides</span><input data-ai-slides type="number" min="3" max="12" value="${state.aiSlides || 8}"></label>
       <label><span>Tone</span><select data-ai-tone>
         ${["Startup pitch", "Business report", "Education", "Marketing", "Minimal"].map((tone) => `<option ${tone === (state.aiTone || "Startup pitch") ? "selected" : ""}>${tone}</option>`).join("")}
       </select></label>
-      <label><span>Template family</span><select data-ai-template-family>
-        ${[["auto","Auto (AI decides)"],["dark-tech","Dark Tech"],["clean-business","Clean Business"],["editorial-split","Editorial Split"],["agriculture-photo","Agriculture Photo"],["showcase","Showcase"]].map(([v,label]) => `<option ${v === (state.aiTemplateFamily || "auto") ? "selected" : ""} value="${v}">${label}</option>`).join("")}
+      <label><span>Theme</span><select data-ai-theme>
+        <option value="auto">Auto (AI decides)</option>
+        ${THEMES.map((theme) => `<option value="${theme.id}" ${state.activeThemeId === theme.id ? "selected" : ""}>${theme.label}</option>`).join("")}
       </select></label>
       <label><span>Palette</span><select data-ai-palette>
         ${[["auto","Auto"],["blue","Blue"],["green","Green"],["orange","Orange"],["purple","Purple"],["dark","Dark"],["teal","Teal"],["red","Red"],["neutral","Neutral"]].map(([v,label]) => `<option ${v === (state.aiPaletteHint || "auto") ? "selected" : ""} value="${v}">${label}</option>`).join("")}
       </select></label>
     </div>
-    <label class="ai-field ai-photos-toggle"><input type="checkbox" data-ai-autophotos ${state.aiAutoPhotos === false ? "" : "checked"}> <span>Auto-match topic photos</span><small>Generated decks me visual keywords se live stock photos search karke lagata hai</small></label>
-    <button class="wide-action primary-action" data-action="generate-ai-ppt" ${state.aiGenerating ? "disabled" : ""}>${icons.spark} ${state.aiGenerating ? (state.aiStatus?.includes("Step 1") ? "Step 1/3: Planning..." : state.aiStatus?.includes("Step 2") ? "Step 2/3: Outlining..." : state.aiStatus?.includes("Step 3") ? "Step 3/3: Writing..." : "Building...") : "Generate PPT"}</button>
+    <button class="wide-action" data-action="run-import" ${state.importKind === "topic" || state.importBusy ? "disabled" : ""}>${state.importBusy ? "Extracting…" : "1 · Extract source"}</button>
+    <button class="wide-action primary-action" data-action="generate-ai-ppt" ${state.aiGenerating ? "disabled" : ""}>${icons.spark} ${state.aiGenerating ? (state.aiStatus?.includes("Step 1") ? "Step 1/3: Planning..." : state.aiStatus?.includes("Step 2") ? "Step 2/3: Outlining..." : state.aiStatus?.includes("Step 3") ? "Step 3/3: Writing..." : "Building...") : `2 · Generate ${formatSpec(state.designKind).label}`}</button>
     <button class="wide-action" data-action="save-project">${icons.folder} Save generated deck</button>
     <button class="wide-action" data-action="export-ppt">${icons.download} Export PPT</button>
-    ${state.aiStatus ? `<div class="model-status ${state.aiStatus.startsWith("Error") ? "error" : ""}">${escapeHtml(state.aiStatus)}</div>` : ""}
+    ${(state.importStatus || state.aiStatus) ? `<div class="model-status ${String(state.importStatus || state.aiStatus).startsWith("Error") ? "error" : ""}">${escapeHtml(state.importStatus || state.aiStatus)}</div>` : ""}
     <div class="ai-note">
       <strong>Output</strong>
-      <span>3-step pipeline: strategy (style/arc/palette) → deck outline → slide-by-slide writing. Outline aate hi deck editor me live ban jata hai — har slide ka content likhte hi preview update hota hai.</span>
+      <span>3-step pipeline: strategy → deck outline → slide-by-slide writing. URL/PDF/DOCX/text source do toh deck usi material pe base hoga. Card format me pages variable-height cards ban jate hain (Gamma style).</span>
     </div>
+  </div>`;
+}
+
+function renderChatPanel() {
+  const messages = state.deckChatMessages || [];
+  const activeModel = getActiveModel();
+  return `<div class="panel-body chat-panel-body">
+    <div class="panel-heading">
+      <div><strong>AI Chat — edit whole deck</strong><span>Ek instruction, poora deck update</span></div>
+    </div>
+    ${!activeModel ? `<div class="model-status error">Pehle Model API section me ek model activate karo.</div>` : ""}
+    <div class="chat-thread">
+      ${messages.length ? messages.map((msg) => `<div class="chat-msg ${msg.role}"><span>${escapeHtml(msg.text)}</span></div>`).join("") : `<div class="chat-empty">Deck ke baare me kuch bhi poocho — "make it punchier", "translate to Hindi", "slide 3 expand karo"…</div>`}
+      ${state.deckChatStatus ? `<div class="chat-msg ai pending"><span>${escapeHtml(state.deckChatStatus)}</span></div>` : ""}
+    </div>
+    <div class="chat-chips">
+      ${DECK_CHAT_QUICK_ACTIONS.map((action) => `<button class="chip-btn" data-chat-chip="${action.id}" ${state.deckChatBusy || !activeModel || !state.pages.length ? "disabled" : ""}>${action.label}</button>`).join("")}
+    </div>
+    <div class="chat-composer">
+      <textarea data-chat-input rows="2" placeholder="Instruction likho…" ${state.deckChatBusy ? "disabled" : ""}></textarea>
+      <button class="send-btn" data-action="send-chat" ${state.deckChatBusy || !activeModel ? "disabled" : ""}>➤</button>
+    </div>
+  </div>`;
+}
+
+function renderThemesPanel() {
+  const groups = themeGroups();
+  return `<div class="panel-body">
+    <div class="panel-heading">
+      <div><strong>Themes</strong><span>One click — poora deck retheme (colors + fonts)</span></div>
+    </div>
+    ${groups.map((group) => `
+      <p class="theme-group-label">${group}</p>
+      <div class="theme-grid">
+        ${THEMES.filter((theme) => theme.group === group).map((theme) => {
+          const active = state.activeThemeId === theme.id;
+          return `<button class="theme-swatch ${active ? "active" : ""}" data-theme-id="${theme.id}" title="${theme.label}">
+            <span class="swatch-preview" style="background:${theme.dark ? theme.paper : theme.paper}">
+              <b style="background:${theme.accent}"></b><i style="background:${theme.pop}"></i>
+              <em style="color:${theme.dark ? "#f1f5f9" : theme.ink};font-family:${theme.headingFont}">Aa</em>
+            </span>
+            <small>${theme.label}</small>
+          </button>`;
+        }).join("")}
+      </div>`).join("")}
+    <button class="wide-action" data-action="reflow-all">${icons.spark} Smart reflow — best layout per slide</button>
+    <div class="ai-note"><strong>Tip</strong><span>Theme lagane ke baad "Smart reflow" chalao — har slide ka layout content density ke hisaab se adapt ho jayega.</span></div>
   </div>`;
 }
 
@@ -1079,8 +1305,29 @@ function renderProjectsPanel() {
       </div>
       <button class="wide-action primary-action" data-action="save-project">${icons.plus} Save current work</button>
       <button class="wide-action" data-action="new-deck">${icons.layout} Start new presentation</button>
+      ${state.cloudUser ? renderCloudProjectsBlock() : `<button class="wide-action" data-action="account">${icons.link} Sign in to sync projects</button>`}
       <p class="template-note">Saved presentations and designs appear in the main Projects gallery.</p>
     </div>`;
+}
+
+function renderCloudProjectsBlock() {
+  const list = state.cloudProjects;
+  const rows = list === null
+    ? `<p class="template-note">Loading cloud projects...</p>`
+    : list.length
+      ? `<div class="cloud-project-list">${list.map((project) => `
+          <button class="cloud-project-row" data-cloud-project="${project.id}">
+            <span class="cloud-project-dot"></span>
+            <span class="cloud-project-copy">
+              <strong>${escapeHtml(project.name)}</strong>
+              <small>${escapeHtml(project.kind)} · ${(project.updatedAt || "").slice(0, 10)}${project.shareId ? " · shared" : ""}</small>
+            </span>
+            ${icons.download}
+          </button>`).join("")}</div>`
+      : `<p class="template-note">No cloud projects yet — save current work to sync it.</p>`;
+  return `<div class="panel-heading compact"><div><strong>Cloud projects</strong><span>${escapeHtml(state.cloudUser.name)} • synced to server</span></div></div>
+    ${rows}
+    <button class="wide-action" data-account-action="refresh-projects">${icons.folder} Refresh</button>`;
 }
 
 function renderTemplateMarketplace() {
@@ -1917,6 +2164,19 @@ function bindEvents() {
   document.querySelectorAll("[data-layer]").forEach((btn) => btn.addEventListener("click", () => update({ selectedId: btn.dataset.layer, selectedIds: [btn.dataset.layer] }, false)));
   document.querySelectorAll("[data-page]").forEach((btn) => btn.addEventListener("click", () => switchPage(Number(btn.dataset.page))));
   document.querySelectorAll("[data-project]").forEach((btn) => btn.addEventListener("click", () => loadProject(btn.dataset.project)));
+  document.querySelectorAll("[data-cloud-project]").forEach((btn) => btn.addEventListener("click", () => loadCloudProject(btn.dataset.cloudProject)));
+  document.querySelectorAll("[data-account-action]").forEach((btn) => btn.addEventListener("click", () => handleAccountAction(btn.dataset.accountAction)));
+  document.querySelector("[data-auth-name]")?.addEventListener("input", (event) => (state.authName = event.target.value));
+  document.querySelector("[data-auth-password]")?.addEventListener("input", (event) => (state.authPassword = event.target.value));
+  document.querySelector("[data-restyle-preset]")?.addEventListener("change", (event) => update({ restylePreset: event.target.value }, true));
+  document.querySelectorAll("[data-viewer-nav]").forEach((btn) => btn.addEventListener("click", () => {
+    const delta = btn.dataset.viewerNav === "next" ? 1 : -1;
+    const next = Math.max(0, Math.min(state.pages.length - 1, state.pageIndex + delta));
+    viewerTrackFlush();
+    viewerTracking.pageIndex = next;
+    viewerTracking.pending = 0;
+    update({ pageIndex: next }, false);
+  }));
   document.querySelectorAll("[data-animation-option]").forEach((btn) => btn.addEventListener("click", () => setAnimationOption(btn.dataset.animationOption)));
   document.querySelectorAll("[data-animation-scope]").forEach((btn) => btn.addEventListener("click", () => setAnimationScope(btn.dataset.animationScope)));
   document.querySelectorAll("[data-transition-option]").forEach((btn) => btn.addEventListener("click", () => setTransitionOption(btn.dataset.transitionOption)));
@@ -1926,6 +2186,30 @@ function bindEvents() {
   document.querySelector("[data-ai-slides]")?.addEventListener("input", (event) => (state.aiSlides = event.target.value));
   document.querySelector("[data-ai-tone]")?.addEventListener("change", (event) => (state.aiTone = event.target.value));
   document.querySelector("[data-ai-autophotos]")?.addEventListener("change", (event) => (state.aiAutoPhotos = event.target.checked));
+  document.querySelector("[data-ai-theme]")?.addEventListener("change", (event) => update({ activeThemeId: event.target.value }, false));
+  document.querySelectorAll("[data-import-kind]").forEach((btn) => btn.addEventListener("click", () => update({ importKind: btn.dataset.importKind, importStatus: "" }, false)));
+  document.querySelector("[data-import-url]")?.addEventListener("input", (event) => (state.importUrl = event.target.value));
+  document.querySelector("[data-import-text]")?.addEventListener("input", (event) => (state.importText = event.target.value));
+  document.querySelector("[data-design-kind]")?.addEventListener("change", (event) => update({ designKind: event.target.value }, false));
+  document.querySelectorAll("[data-theme-id]").forEach((btn) => btn.addEventListener("click", () => {
+    update({ activeThemeId: btn.dataset.themeId }, false);
+    applyThemeToCurrentDeck();
+  }));
+  document.querySelectorAll("[data-chat-chip]").forEach((btn) => btn.addEventListener("click", () => {
+    const action = DECK_CHAT_QUICK_ACTIONS.find((item) => item.id === btn.dataset.chatChip);
+    if (action) sendDeckChat(action.instruction);
+  }));
+  const chatInput = document.querySelector("[data-chat-input]");
+  chatInput?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      sendDeckChat();
+    }
+  });
+  document.querySelector("[data-chat-input]")?.addEventListener("input", () => {});
+  document.querySelectorAll("[data-page-jump]").forEach((card) => card.addEventListener("click", () => {
+    update({ pageIndex: Number(card.dataset.pageJump), deckViewMode: "editor" });
+  }));
   document.querySelectorAll(".slide-element").forEach((el) => {
     el.addEventListener("pointerdown", startDrag);
     if (el.classList.contains("text")) {
@@ -1975,6 +2259,11 @@ function bindEvents() {
 
 function handleKeyboard(event) {
   if (event.target.matches("input, textarea, select, [contenteditable='true']")) return;
+  if (state.viewerMode) {
+    if (event.key === "ArrowRight" || event.key === "PageDown") update({ pageIndex: Math.min(state.pages.length - 1, state.pageIndex + 1) }, false);
+    else if (event.key === "ArrowLeft" || event.key === "PageUp") update({ pageIndex: Math.max(0, state.pageIndex - 1) }, false);
+    return;
+  }
   const commandKey = event.ctrlKey || event.metaKey;
   const key = event.key.toLowerCase();
   if (commandKey && key === "z" && event.shiftKey) {
@@ -2011,7 +2300,7 @@ function selectCanvasElement(item, options = {}) {
 }
 
 function startDrag(event) {
-  if (state.textBoxMode) return;
+  if (state.textBoxMode || state.viewerMode) return;
   const target = event.currentTarget;
   const item = getPage().elements.find((el) => el.id === target.dataset.id);
   if (!item) return;
@@ -2282,8 +2571,18 @@ function handleAction(action) {
   if (action === "add-content-slide") return addPresentationSlide("content");
   if (action === "add-chart-slide") return addPresentationSlide("chart");
   if (action === "generate-ai-ppt") return generateAiPpt();
+  if (action === "run-import") return runImportExtraction();
+  if (action === "clear-import-source") return update({ importSourceText: "", importSourceTitle: "", importStatus: "" }, false);
+  if (action === "send-chat") return sendDeckChat();
+  if (action === "reflow-all") return smartReflowAll();
+  if (action === "toggle-flow-view") return update({ deckViewMode: state.deckViewMode === "cards" ? "editor" : "cards" }, false);
+  if (action === "open-analytics") return openViewerAnalytics();
+  if (action === "export-doc-html") return exportDocumentHtml();
+  if (action === "apply-active-theme") return applyThemeToCurrentDeck();
   if (action === "remix-layout") return remixLayout();
   if (action === "regenerate-slide") return regenerateSlide();
+  if (action === "account") return update({ authModalOpen: !state.authModalOpen, authStatus: "" }, false);
+  if (action === "apply-restyle") return applyRestyle();
   if (action === "toggle-collab") return toggleCollab();
   if (action === "save-as-template") return saveAsTemplate();
   if (action === "use-template") return useTemplate();
@@ -2293,6 +2592,7 @@ function handleAction(action) {
   if (action === "remove-animations") return removeAnimations();
   if (action === "apply-animation-all") return applyAnimationToAllPages();
   if (action === "preview") return update({ zoom: state.zoom < 0.9 ? 0.9 : 0.62 }, false);
+  if (action === "present") return presentDesign();
   if (action === "beautify") return beautify();
   if (action === "text-box-mode") return update({ tool: "text", textBoxMode: !state.textBoxMode, selectedId: null, selectedIds: [] }, false);
   if (action === "add-page") return addPage();
@@ -2324,6 +2624,233 @@ function handleShareAction(action) {
   if (action === "add-person") return update({ shareMessage: "Type a name or email in Add people." }, false);
   if (action === "whatsapp") return openShareUrl(`https://wa.me/?text=${encodeURIComponent(shareText())}`, "WhatsApp opened");
   if (action === "instagram") return openShareUrl("https://www.instagram.com/", "Instagram opened");
+}
+
+// ── Cloud: auth, project sync, share links ──────────────────────────
+async function cloudFetch(path, options = {}) {
+  const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
+  if (state.cloudToken) headers.Authorization = `Bearer ${state.cloudToken}`;
+  const res = await fetch(path, { ...options, headers });
+  return res.json().catch(() => ({ ok: false }));
+}
+
+async function initCloudSession() {
+  if (!state.cloudToken) return;
+  try {
+    const data = await cloudFetch("/api/me");
+    if (data.ok) {
+      state.cloudUser = data.user;
+      refreshCloudProjects();
+    } else {
+      state.cloudToken = "";
+      localStorage.removeItem("studio-cloud-token");
+    }
+  } catch {
+    // server not reachable — cloud features stay disabled
+  }
+}
+
+async function refreshCloudProjects(reRender = true) {
+  if (!state.cloudUser) return;
+  try {
+    const data = await cloudFetch("/api/projects");
+    if (data.ok) state.cloudProjects = data.projects || [];
+  } catch {}
+  if (reRender) render();
+}
+
+async function syncToCloud() {
+  if (!state.cloudUser || state.cloudBusy) return;
+  state.cloudBusy = true;
+  const payload = {
+    name: state.projectName,
+    kind: state.tool === "ppt" || state.tool === "ai-ppt" ? "Presentation" : "Design",
+    pages: state.pages,
+  };
+  let data;
+  try {
+    data = state.cloudProjectId
+      ? await cloudFetch(`/api/projects/${state.cloudProjectId}`, { method: "PUT", body: JSON.stringify(payload) })
+      : await cloudFetch("/api/projects", { method: "POST", body: JSON.stringify(payload) });
+  } catch {
+    data = { ok: false, error: "server unreachable" };
+  }
+  state.cloudBusy = false;
+  if (data.ok) {
+    if (!state.cloudProjectId && data.id) state.cloudProjectId = data.id;
+    state.cloudStatus = "Synced to cloud.";
+    refreshCloudProjects(false);
+  } else {
+    state.cloudStatus = `Cloud sync failed: ${data.error || "server error"}`;
+  }
+}
+
+async function loadCloudProject(id) {
+  const data = await cloudFetch(`/api/projects/${id}`);
+  const project = data.ok ? data.project : null;
+  if (!project) {
+    state.cloudStatus = "Failed to load cloud project";
+    render();
+    return;
+  }
+  state.projectName = project.name;
+  state.pages = JSON.parse(JSON.stringify(project.pages));
+  state.pageIndex = 0;
+  state.selectedId = null;
+  state.selectedIds = [];
+  state.cloudProjectId = project.id;
+  state.history = [];
+  state.future = [];
+  state.tool = project.kind === "Presentation" || project.kind === "AI PPT" ? "ppt" : "text";
+  state.cloudStatus = `Loaded "${project.name}" from cloud.`;
+  render();
+}
+
+function renderAccountModal() {
+  if (state.cloudUser) {
+    return `<div class="modal-backdrop"><div class="modal account-modal">
+      <div class="modal-head"><strong>Account</strong><button class="icon-btn" data-account-action="close">${icons.down}</button></div>
+      <div class="modal-body">
+        <p class="account-hello">Signed in as <strong>${escapeHtml(state.cloudUser.name)}</strong>${state.cloudStatus ? `<span class="account-status">${escapeHtml(state.cloudStatus)}</span>` : ""}</p>
+        <button class="wide-action" data-account-action="refresh-projects">${icons.folder} Refresh cloud projects</button>
+        <button class="wide-action" data-account-action="sync-now">${icons.check} Sync current deck now</button>
+        <button class="wide-action" data-account-action="signout">Sign out</button>
+        <p class="account-note">Projects auto-sync on save. Share links create a public read-only view at <code>/p/…</code>.</p>
+      </div>
+    </div></div>`;
+  }
+  return `<div class="modal-backdrop"><div class="modal account-modal">
+    <div class="modal-head"><strong>${state.authMode === "signup" ? "Create account" : "Sign in"}</strong><button class="icon-btn" data-account-action="close">${icons.down}</button></div>
+    <div class="modal-body">
+      <p class="account-note">Sign in to sync projects to the cloud server and create public share links.</p>
+      <label class="ai-field"><span>Name</span><input data-auth-name placeholder="Your name" value="${escapeAttr(state.authName)}"></label>
+      <label class="ai-field"><span>Password</span><input data-auth-password type="password" placeholder="At least 4 characters" value="${escapeAttr(state.authPassword)}"></label>
+      ${state.authStatus ? `<p class="share-message">${escapeHtml(state.authStatus)}</p>` : ""}
+      <button class="wide-action primary-action" data-account-action="submit" ${state.cloudBusy ? "disabled" : ""}>${state.authMode === "signup" ? "Create account" : "Sign in"}</button>
+      <button class="wide-action" data-account-action="switch-mode">${state.authMode === "signup" ? "Already have an account? Sign in" : "New here? Create an account"}</button>
+    </div>
+  </div></div>`;
+}
+
+async function handleAccountAction(action) {
+  if (action === "close") return update({ authModalOpen: false, authStatus: "" }, false);
+  if (action === "switch-mode") return update({ authMode: state.authMode === "signup" ? "login" : "signup", authStatus: "" }, false);
+  if (action === "refresh-projects") {
+    state.cloudStatus = "Refreshing cloud projects...";
+    render();
+    await refreshCloudProjects();
+    state.cloudStatus = "Cloud projects refreshed.";
+    render();
+    return;
+  }
+  if (action === "sync-now") {
+    state.cloudStatus = "Syncing...";
+    render();
+    await syncToCloud();
+    render();
+    return;
+  }
+  if (action === "signout") {
+    try { await cloudFetch("/api/auth/logout", { method: "POST" }); } catch {}
+    state.cloudToken = "";
+    state.cloudUser = null;
+    state.cloudProjects = null;
+    state.cloudProjectId = "";
+    state.cloudStatus = "";
+    localStorage.removeItem("studio-cloud-token");
+    update({ authModalOpen: false, authStatus: "" });
+    return;
+  }
+  if (action === "submit") {
+    if (state.cloudBusy) return;
+    state.cloudBusy = true;
+    state.authStatus = state.authMode === "signup" ? "Creating account..." : "Signing in...";
+    render();
+    const data = await cloudFetch(`/api/auth/${state.authMode === "signup" ? "signup" : "login"}`, {
+      method: "POST",
+      body: JSON.stringify({ name: state.authName, password: state.authPassword }),
+    });
+    state.cloudBusy = false;
+    if (data.ok) {
+      state.cloudToken = data.token;
+      state.cloudUser = data.user;
+      localStorage.setItem("studio-cloud-token", data.token);
+      state.cloudProjectId = "";
+      update({ authModalOpen: false, authStatus: "" });
+      syncToCloud();
+      refreshCloudProjects(false);
+    } else {
+      state.authStatus = data.error || "Authentication failed";
+      render();
+    }
+  }
+}
+
+function updateAuthField(field, value) {
+  if (field === "name") state.authName = value;
+  else if (field === "password") state.authPassword = value;
+  state.authStatus = "";
+}
+
+async function createPublicShareLink() {
+  if (!state.cloudUser) {
+    state.cloudStatus = "Sign in to create a public share link.";
+    render();
+    return "";
+  }
+  if (state.cloudBusy) return "";
+  state.cloudBusy = true;
+  const payload = {
+    name: state.projectName,
+    kind: state.tool === "ppt" || state.tool === "ai-ppt" ? "Presentation" : "Design",
+    pages: state.pages,
+  };
+  let projectId = state.cloudProjectId;
+  try {
+    if (!projectId) {
+      const created = await cloudFetch("/api/projects", { method: "POST", body: JSON.stringify(payload) });
+      if (created.ok && created.id) {
+        projectId = created.id;
+        state.cloudProjectId = projectId;
+      } else {
+        state.cloudBusy = false;
+        state.cloudStatus = `Cloud sync failed: ${created.error || "server error"}`;
+        render();
+        return "";
+      }
+    } else {
+      await cloudFetch(`/api/projects/${projectId}`, { method: "PUT", body: JSON.stringify(payload) });
+    }
+    const shared = await cloudFetch(`/api/projects/${projectId}/share`, { method: "POST" });
+    state.cloudBusy = false;
+    if (shared.ok && shared.shareId) {
+      state.cloudStatus = "Public share link created.";
+      refreshCloudProjects(false);
+      return `${location.origin}/p/${shared.shareId}`;
+    }
+    state.cloudStatus = `Share link failed: ${shared.error || "server error"}`;
+  } catch {
+    state.cloudBusy = false;
+    state.cloudStatus = "Cloud server unreachable.";
+  }
+  render();
+  return "";
+}
+
+function cloudShareUrl() {
+  return `${location.origin}${location.pathname}#${encodeURIComponent(state.projectName || "design")}`;
+}
+
+// ── Restyle: one-click redesign to a preset look ────────────────────
+function applyRestyle() {
+  const preset = RESTYLE_PRESETS.find((item) => item.id === state.restylePreset);
+  if (!preset || !state.pages.length) return;
+  const restyled = restyleDeckToPreset(state.pages, preset);
+  commit(() => {
+    state.pages = restyled;
+  });
+  state.aiStatus = `Deck restyled to "${preset.label}".`;
+  render();
 }
 
 function handleModelAction(action, modelId = "") {
@@ -2741,7 +3268,7 @@ async function generateAiPpt() {
     state.aiStatus = `Step 2/3 · Generating slides${effectiveStrategy ? " with strategy" : ""}...`;
     render();
     const t2 = performance.now();
-    const planResult = await requestAiDeckPlan(activeModel, topic, slideCount, tone, effectiveStrategy, state.brandKit);
+    const planResult = await requestAiDeckPlan(activeModel, topic, slideCount, tone, effectiveStrategy, state.brandKit, state.importSourceText);
     const t2ms = Math.round(performance.now() - t2);
 
     if (planResult.ok) {
@@ -2771,6 +3298,7 @@ async function generateAiPpt() {
             deckTitle: planResult.deck.title,
             previousTitles: planResult.deck.slides.slice(0, i).map((s) => s.title).filter(Boolean),
             brand: state.brandKit,
+            sourceText: state.importSourceText ? state.importSourceText.slice(0, 4000) : "",
           },
           planResult.deck.slides[i],
           i,
@@ -2811,13 +3339,24 @@ async function generateAiPpt() {
       console.log(`[Step 3/3] ✓ Slide writing complete in ${t3ms}ms — ${writtenSlides}/${planResult.deck.slides.length} slides enriched`);
 
       const finalBuilt = buildDeckPages(planResult.deck, topic, slideCount, tone);
+      let finalPages = finalBuilt.pages;
+      // Apply chosen theme (one-click retheme of the fresh deck).
+      const chosenTheme = themeById(state.activeThemeId);
+      if (chosenTheme) finalPages = applyThemeToPages(finalPages, chosenTheme);
+      // Convert to the selected output format (card deck / document / social).
+      if (state.designKind !== "presentation") {
+        finalPages = convertPagesForFormat(finalPages, state.designKind);
+        finalPages = reflowAiPages(finalPages);
+      }
       commit(() => {
         state.projectName = finalBuilt.title;
-        state.pages = finalBuilt.pages;
+        state.pages = finalPages;
+        state.pageIndex = 0;
         state.selectedId = null;
         state.selectedIds = [];
+        state.deckViewMode = state.designKind === "presentation" ? "editor" : "cards";
       });
-      enhanceDeckWithPhotos(finalBuilt.pages, planResult.deck, topic);
+      enhanceDeckWithPhotos(finalPages, planResult.deck, topic);
       state.aiGenerating = false;
       const modelLabel = activeModel.displayName || activeModel.modelId;
       state.aiStatus = `✓ Generated with ${modelLabel}${strategy ? " · Strategy applied" : ""} · ${writtenSlides} slides enriched.`;
@@ -3054,6 +3593,158 @@ function renderRemoteCursorNodes() {
   </div>`).join("");
 }
 
+// ══ Pro features: import · chat-edit · themes · reflow · analytics ══
+
+async function runImportExtraction() {
+  const kind = state.importKind;
+  state.importBusy = true;
+  state.importStatus = "";
+  render();
+  try {
+    if (kind === "url") {
+      const url = (state.importUrl || "").trim();
+      if (!url) throw new Error("URL enter karo pehle.");
+      const res = await fetch("/api/import/url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!data.ok) throw new Error(data.error || "URL se text nahi mila.");
+      state.importSourceText = data.text;
+      state.importSourceTitle = data.title || url;
+      if (!state.aiTopic) state.aiTopic = data.title || "";
+    } else if (kind === "file") {
+      const input = document.querySelector("[data-import-file]");
+      const file = input?.files?.[0];
+      if (!file) throw new Error("File choose karo pehle (.pdf / .docx / .txt).");
+      const text = await extractTextFromFile(file);
+      if (!text || text.trim().length < 40) throw new Error("File me kaafi text nahi mila.");
+      state.importSourceText = text.slice(0, 60000);
+      state.importSourceTitle = file.name;
+      if (!state.aiTopic) state.aiTopic = file.name.replace(/\.[^.]+$/, "");
+    } else if (kind === "text") {
+      const text = (state.importText || "").trim();
+      if (text.length < 40) throw new Error("Kam se kam kuch lines to paste karo.");
+      state.importSourceText = text.slice(0, 60000);
+      state.importSourceTitle = "pasted text";
+    } else {
+      throw new Error("Unknown import kind.");
+    }
+    state.importStatus = `✓ Source extracted (${state.importSourceText.length} chars) — ab Generate dabao.`;
+  } catch (error) {
+    state.importStatus = `Error: ${error.message}`;
+  }
+  state.importBusy = false;
+  render();
+}
+
+function importSourcePromptBlock() {
+  if (!state.importSourceText) return "";
+  return `
+
+SOURCE MATERIAL (the deck MUST be based ONLY on this content — do not invent facts beyond it):
+"""
+${state.importSourceText.slice(0, 12000)}
+"""`;
+}
+
+function sendDeckChat(presetInstruction = "") {
+  const input = document.querySelector("[data-chat-input]");
+  const instruction = presetInstruction || (input?.value || "").trim();
+  if (!instruction) return;
+  const model = getActiveModel();
+  if (!model) return update({ deckChatStatus: "Error: pehle Model API me model activate karo." }, false);
+  if (state.deckChatBusy) return;
+
+  const messages = [...(state.deckChatMessages || []), { role: "user", text: instruction }];
+  state.deckChatMessages = messages;
+  state.deckChatBusy = true;
+  state.deckChatStatus = "Poore deck ko analyze kar raha hoon…";
+  if (input) input.value = "";
+  render();
+
+  (async () => {
+    try {
+      const result = await agentDeckEdit(model, { topic: state.projectName }, instruction, state.pages);
+      if (!result.ok) throw new Error(result.error);
+      const applied = applyDeckOpsToPages(state.pages, result.ops);
+      commit(() => {
+        state.pages = applied.pages;
+        state.deckChatMessages = [...(state.deckChatMessages || []), { role: "ai", text: result.summary || `${applied.changed} slides update kiye.` }];
+        state.deckChatStatus = "";
+      });
+    } catch (error) {
+      state.deckChatBusy = false;
+      state.deckChatStatus = `Error: ${error.message}`;
+      render();
+    }
+  })();
+}
+
+function smartReflowAll() {
+  if (!state.pages.length) return;
+  const reflowed = autoReflowAll(state.pages);
+  commit(() => { state.pages = reflowed; });
+  state.aiStatus = "✓ Smart reflow done — har slide ka layout content ke hisaab se adapt ho gaya.";
+  render();
+}
+
+function applyThemeToCurrentDeck() {
+  const theme = themeById(state.activeThemeId);
+  if (!theme) return;
+  const themed = applyThemeToPages(state.pages, theme);
+  commit(() => { state.pages = themed; });
+}
+
+async function openViewerAnalytics() {
+  const project = (state.cloudProjects || []).find((item) => item.id === state.cloudProjectId);
+  if (!project?.shareId) {
+    return update({ analyticsStatus: "Error: pehle deck save karo aur public share link banao." }, false);
+  }
+  state.analyticsBusy = true;
+  state.analyticsStatus = "";
+  render();
+  try {
+    const data = await cloudFetch(`/api/analytics/report?shareId=${encodeURIComponent(project.shareId)}`);
+    if (!data.ok) throw new Error(data.error || "Analytics load nahi hua.");
+    state.analyticsData = data;
+  } catch (error) {
+    state.analyticsStatus = `Error: ${error.message}`;
+  }
+  state.analyticsBusy = false;
+  render();
+}
+
+function exportDocumentHtml() {
+  const html = buildDocumentHtml(state.projectName, state.pages);
+  downloadBlob(`${(state.projectName || "document").replace(/[^\w\- ]+/g, "").slice(0, 40) || "document"}.html`, new Blob([html], { type: "text/html" }));
+  state.shareMessage = "Document HTML exported.";
+  render();
+}
+
+// Viewer-side analytics beacon: batches per-slide dwell time and flushes
+// every few seconds + on slide change/page hide.
+const viewerTracking = { sessionId: `s-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`, pageIndex: 0, pending: 0 };
+
+function viewerTrackFlush() {
+  if (!state.viewerMode || !state.viewerShareId || !viewerTracking.pending) return;
+  const payload = JSON.stringify({ shareId: state.viewerShareId, sessionId: viewerTracking.sessionId, pageIndex: viewerTracking.pageIndex, ms: Math.round(viewerTracking.pending) });
+  viewerTracking.pending = 0;
+  try {
+    if (navigator.sendBeacon) navigator.sendBeacon("/api/analytics/track", new Blob([payload], { type: "application/json" }));
+    else fetch("/api/analytics/track", { method: "POST", headers: { "Content-Type": "application/json" }, body: payload, keepalive: true });
+  } catch {}
+}
+
+setInterval(() => {
+  if (state.viewerMode && document.visibilityState === "visible") {
+    viewerTracking.pending += 1000;
+    if (viewerTracking.pending >= 3000) viewerTrackFlush();
+  }
+}, 1000);
+window.addEventListener("pagehide", viewerTrackFlush);
+
 // ── Step 1: AI Reasoning — thinks about HOW to make the best PPT ──────────
 async function requestAiReasoning(model, topic, slideCount, tone, userTemplateFamily = "auto", userPaletteHint = "auto", userBrand = null) {
   const familyHint = userTemplateFamily !== "auto" ? `USER PREFERENCE: templateFamily MUST be "${userTemplateFamily}". Do not choose a different family.` : "";
@@ -3129,7 +3820,13 @@ function generateFallbackAiPpt(topic, slideCount, tone) {
   saveCurrentProject("AI PPT", false);
 }
 
-async function requestAiDeckPlan(model, topic, slideCount, tone, strategy = null, brand = null) {
+async function requestAiDeckPlan(model, topic, slideCount, tone, strategy = null, brand = null, sourceText = "") {
+  const sourceBlock = sourceText ? `
+SOURCE MATERIAL (base the outline STRICTLY on this content — reuse its structure, headings, facts and wording where possible; do not invent facts beyond it):
+"""
+${sourceText.slice(0, 12000)}
+"""
+` : "";
   // Build strategy context block if Step 1 reasoning succeeded
   const brandHint = brandKitActive(brand) ? `\nBRAND KIT (the deck design MUST follow this palette and font pairing):\n${brandPromptBlock(brand)}\n` : "";
   const strategyContext = strategy ? `
@@ -3157,8 +3854,9 @@ The paletteHint in your JSON must match: "${strategy.paletteChoice || "blue"}".
     {
       role: "user",
       content: `Create a complete ${slideCount}-slide presentation for this exact user topic: "${topic}". Tone label: ${tone}.
-${strategyContext}${brandHint}
+${sourceBlock}${strategyContext}${brandHint}
 Interpretation rules:
+- If SOURCE MATERIAL is provided, the outline must follow its content and order — headings become slide titles, its lists become bullets.
 - If the topic is a broad noun or short phrase such as "farmer", "teacher", "water", or "organic farming", create an educational/overview deck about that topic. Do not turn it into a startup, product, app, SaaS, operating system, or investor pitch unless the user topic explicitly asks for that.
 - The tone label is style guidance only. "Startup pitch" must not force a product pitch when the user gave a broad topic.
 - Do not invent company/product names, market sizes, precise dollar amounts, percentages, dates, named subscriptions, or named competitors unless the user topic explicitly provides them.
@@ -4818,16 +5516,35 @@ function shareText() {
 }
 
 function shareUrl() {
-  return `${location.origin}${location.pathname}#${encodeURIComponent(state.projectName || "design")}`;
+  return cloudShareUrl();
 }
 
 function copyShareLink(message) {
+  if (state.cloudUser) {
+    const url = createPublicShareLink();
+    if (url && typeof url.then === "function") {
+      url.then((link) => { if (link) copyToClipboard(link, message); });
+      return;
+    }
+  }
   return copyToClipboard(shareUrl(), message);
 }
 
 function copyEmbedCode() {
-  const code = `<iframe title="${escapeAttr(state.projectName || "Design")}" src="${shareUrl()}" width="960" height="540"></iframe>`;
-  return copyToClipboard(code, "Embed code copied");
+  if (state.cloudUser) {
+    const url = createPublicShareLink();
+    if (url && typeof url.then === "function") {
+      url.then((link) => {
+        if (link) copyToClipboard(embedCodeFor(link), "Embed code copied");
+      });
+      return;
+    }
+  }
+  return copyToClipboard(embedCodeFor(shareUrl()), "Embed code copied");
+}
+
+function embedCodeFor(url) {
+  return `<iframe title="${escapeAttr(state.projectName || "Design")}" src="${url}" width="960" height="540"></iframe>`;
 }
 
 function copyToClipboard(value, message) {
@@ -5201,14 +5918,25 @@ function elementToHtml(el) {
   return `<div style="${base}background:${el.fill};border-radius:${el.type === "circle" || el.type === "badge" || el.type === "pill" ? "999px" : "0"};clip-path:${el.type === "triangle" ? "polygon(50% 0,100% 100%,0 100%)" : "none"};"></div>`;
 }
 
-function exportPptx() {
-  const blob = buildPptxBlob();
-  downloadBlob("design.pptx", blob);
+async function exportPptx() {
+  state.shareMessage = "Exporting PPTX — embedding images...";
+  render();
+  const blob = await buildPptxBlob();
+  if (blob) {
+    downloadBlob("design.pptx", blob);
+    state.shareMessage = `PPTX exported (${Math.round(blob.size / 1024)} KB)`;
+  } else {
+    state.shareMessage = "PPTX export failed — no slides to export.";
+  }
+  render();
 }
 
-function buildPptxBlob() {
+async function buildPptxBlob() {
   const files = {};
-  files["[Content_Types].xml"] = pptContentTypes();
+  // Embed slide images (photos, posters) directly into the package so the
+  // deck renders offline and in PowerPoint without hotlinked URLs.
+  const mediaMap = await collectPptxMedia();
+  files["[Content_Types].xml"] = pptContentTypes(mediaMap);
   files["_rels/.rels"] = pptRootRels();
   files["docProps/core.xml"] = pptCoreXml();
   files["docProps/app.xml"] = pptAppXml();
@@ -5220,15 +5948,70 @@ function buildPptxBlob() {
   files["ppt/slideLayouts/slideLayout1.xml"] = pptSlideLayoutXml();
   files["ppt/slideLayouts/_rels/slideLayout1.xml.rels"] = pptSlideLayoutRelsXml();
   state.pages.forEach((_, index) => {
-    files[`ppt/slides/slide${index + 1}.xml`] = pptSlideXml(index + 1);
-    files[`ppt/slides/_rels/slide${index + 1}.xml.rels`] = pptSlideRelsXml(index + 1);
+    files[`ppt/slides/slide${index + 1}.xml`] = pptSlideXml(index + 1, mediaMap);
+    files[`ppt/slides/_rels/slide${index + 1}.xml.rels`] = pptSlideRelsXml(index + 1, mediaMap);
+  });
+  mediaMap.forEach((media) => {
+    files[`ppt/media/${media.file}`] = media.bytes;
   });
   return zipStored(files, "application/vnd.openxmlformats-officedocument.presentationml.presentation");
 }
 
-function pptContentTypes() {
+// Collects every image URL used across pages and downloads the bytes when
+// the host allows CORS. Returns Map<src, { file, bytes, ext }>.
+async function collectPptxMedia() {
+  const mediaMap = new Map();
+  const seen = new Set();
+  state.pages.forEach((page) => {
+    page.elements.forEach((el) => {
+      const src = el.type === "image" ? el.src : el.type === "video" ? el.poster : "";
+      if (src && !seen.has(src)) seen.add(src);
+    });
+  });
+  let index = 0;
+  for (const src of seen) {
+    const fetched = await fetchImageBytes(src);
+    if (fetched) {
+      index += 1;
+      mediaMap.set(src, { file: `image${index}.${fetched.ext}`, bytes: fetched.bytes, ext: fetched.ext });
+    }
+  }
+  return mediaMap;
+}
+
+async function fetchImageBytes(url) {
+  try {
+    const res = await fetch(url, { mode: "cors", credentials: "omit" });
+    if (!res.ok) return null;
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    return { bytes, ext: pptMediaExt(res.headers.get("content-type") || "", bytes) };
+  } catch {
+    return null;
+  }
+}
+
+function pptMediaExt(contentType, bytes) {
+  const clean = String(contentType).toLowerCase();
+  if (clean.includes("jpeg") || clean.includes("jpg")) return "jpg";
+  if (clean.includes("png")) return "png";
+  if (clean.includes("gif")) return "gif";
+  if (clean.includes("webp")) return "webp";
+  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "jpg";
+  if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return "png";
+  if (bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46) return "gif";
+  if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 && bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50) return "webp";
+  return "png";
+}
+
+function pptMime(ext) {
+  return ({ png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp" })[ext] || "image/png";
+}
+
+function pptContentTypes(mediaMap = new Map()) {
   const slideOverrides = state.pages.map((_, index) => `<Override PartName="/ppt/slides/slide${index + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>`).join("");
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/><Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/><Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/><Override PartName="/ppt/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>${slideOverrides}</Types>`;
+  const usedExts = [...new Set([...mediaMap.values()].map((media) => media.ext))];
+  const mediaDefaults = usedExts.map((ext) => `<Default Extension="${ext}" ContentType="${pptMime(ext)}"/>`).join("");
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>${mediaDefaults}<Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/><Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/><Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/><Override PartName="/ppt/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>${slideOverrides}</Types>`;
 }
 
 function pptRootRels() {
@@ -5254,21 +6037,36 @@ function pptPresentationRelsXml() {
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="slideMasters/slideMaster1.xml"/>${slideRels}</Relationships>`;
 }
 
-function pptSlideXml(index) {
+function pptSlideXml(index, mediaMap = new Map()) {
   const page = state.pages[index - 1];
   const cx = CANVAS.w * 9525;
   const cy = CANVAS.h * 9525;
   const bgColor = (page.background.startsWith("#") ? page.background : "#ffffff").replace("#", "").toUpperCase();
-  const shapes = page.elements.map((el, i) => pptElementXml(el, 3 + i));
+  const shapes = page.elements.map((el, i) => pptElementXml(el, 3 + i, mediaMap));
   const bgRect = `<p:sp><p:nvSpPr><p:cNvPr id="2" name="Background"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr>${pptXfrm({ x: 0, y: 0, w: CANVAS.w, h: CANVAS.h })}<a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:solidFill><a:srgbClr val="${bgColor}"/></a:solidFill><a:ln><a:noFill/></a:ln></p:spPr><p:txBody><a:bodyPr/><a:lstStyle/><a:p/></p:txBody></p:sp>`;
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>${bgRect}${shapes.join("")}</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>`;
 }
 
-function pptElementXml(el, id) {
-  if (el.type === "image" || el.type === "video") return pptImageXml(el, id);
+function pptElementXml(el, id, mediaMap = new Map()) {
+  if (el.type === "image" || el.type === "video") return pptImageXml(el, id, mediaMap);
   if (el.type === "icon") return pptIconXml(el, id);
   if (el.type === "shapeAsset") return pptShapeAssetXml(el, id);
   return pptShapeXml(el, id);
+}
+
+function pptXfrm(el) {
+  const x = Math.round((el.x || 0) * 9525);
+  const y = Math.round((el.y || 0) * 9525);
+  const w = Math.round((el.w || 0) * 9525);
+  const h = Math.round((el.h || 0) * 9525);
+  return `<a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${w}" cy="${h}"/></a:xfrm>`;
+}
+
+function pptSolidFill(color, alphaVal) {
+  const clr = `<a:srgbClr val="${pptColor(color)}"`;
+  return alphaVal
+    ? `<a:solidFill>${clr}><a:alpha val="${alphaVal}"/></a:srgbClr></a:solidFill>`
+    : `<a:solidFill>${clr}/></a:solidFill>`;
 }
 
 function pptShapeXml(el, id) {
@@ -5278,8 +6076,8 @@ function pptShapeXml(el, id) {
   if (el.type === "circle" || el.type === "badge") prst = "ellipse";
   else if (el.type === "triangle") prst = "triangle";
   else if (el.type === "pill") { prst = "roundRect"; adj = `<a:avLst><a:gd name="adj" fmla="val 50000"/></a:avLst>`; }
-  const alpha = el.opacity && el.opacity < 1 ? `<a:alpha val="${Math.round(el.opacity * 100000)}"/>` : "";
-  const fill = isText || el.fill === "transparent" ? `<a:noFill/>` : `<a:solidFill><a:srgbClr val="${pptColor(el.fill)}"${alpha}/></a:solidFill>`;
+  const alpha = el.opacity && el.opacity < 1 ? Math.round(el.opacity * 100000) : 0;
+  const fill = isText || el.fill === "transparent" ? `<a:noFill/>` : pptSolidFill(el.fill, alpha);
   const body = isText ? pptTextBody(el) : "<p:txBody><a:bodyPr/><a:lstStyle/><a:p/></p:txBody>";
   const algn = el.align === "center" ? ' algn="ctr"' : el.align === "right" ? ' algn="r"' : "";
   return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="${xmlAttr(layerName(el))}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr>${pptXfrm(el)}<a:prstGeom prst="${prst}">${adj}<a:avLst/></a:prstGeom>${fill}<a:ln><a:noFill/></a:ln></p:spPr>${body}</p:sp>`;
@@ -5288,17 +6086,17 @@ function pptShapeXml(el, id) {
 function pptTextBody(el) {
   const lines = String(el.text || "").split(/\n/);
   const fontSize = Math.max(1, Math.round((el.fontSize || 24) * 100));
-  const alpha = el.opacity && el.opacity < 1 ? `<a:alpha val="${Math.round(el.opacity * 100000)}"/>` : "";
+  const alpha = el.opacity && el.opacity < 1 ? Math.round(el.opacity * 100000) : 0;
   const algn = el.align === "center" ? ' algn="ctr"' : el.align === "right" ? ' algn="r"' : "";
-  const runs = lines.map((line) => `<a:p${algn}><a:r><a:rPr lang="en-US" sz="${fontSize}" b="${Number(el.fontWeight || 400) >= 700 ? 1 : 0}" dirty="0"><a:solidFill><a:srgbClr val="${pptColor(el.color)}"${alpha}/></a:solidFill><a:latin typeface="${xmlAttr(el.fontFamily || "Inter")}"/></a:rPr><a:t>${xmlText(line || " ")}</a:t></a:r><a:endParaRPr lang="en-US" sz="${fontSize}"/></a:p>`).join("");
+  const runs = lines.map((line) => `<a:p${algn}><a:r><a:rPr lang="en-US" sz="${fontSize}" b="${Number(el.fontWeight || 400) >= 700 ? 1 : 0}" dirty="0">${pptSolidFill(el.color, alpha)}<a:latin typeface="${xmlAttr(el.fontFamily || "Inter")}"/></a:rPr><a:t>${xmlText(line || " ")}</a:t></a:r><a:endParaRPr lang="en-US" sz="${fontSize}"/></a:p>`).join("");
   return `<p:txBody><a:bodyPr wrap="square" anchor="t"/><a:lstStyle/>${runs}</p:txBody>`;
 }
 
 function pptIconXml(el, id) {
   const char = String.fromCodePoint(Number(el.code) || 9632);
   const fontSize = Math.max(1, Math.round((el.fontSize || Math.min(el.w, el.h)) * 100));
-  const alpha = el.opacity && el.opacity < 1 ? `<a:alpha val="${Math.round(el.opacity * 100000)}"/>` : "";
-  return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="${xmlAttr(el.name || "Icon")}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr>${pptXfrm(el)}<a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></p:spPr><p:txBody><a:bodyPr wrap="none" anchor="ctr"/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US" sz="${fontSize}" dirty="0"><a:solidFill><a:srgbClr val="${pptColor(el.color || "#111827")}"${alpha}/></a:solidFill><a:latin typeface="Segoe UI Symbol"/><a:ea typeface="Segoe UI Symbol"/><a:cs typeface="Segoe UI Symbol"/></a:rPr><a:t>${xmlText(char)}</a:t></a:r></a:p></p:txBody></p:sp>`;
+  const alpha = el.opacity && el.opacity < 1 ? Math.round(el.opacity * 100000) : 0;
+  return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="${xmlAttr(el.name || "Icon")}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr>${pptXfrm(el)}<a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></p:spPr><p:txBody><a:bodyPr wrap="none" anchor="ctr"/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US" sz="${fontSize}" dirty="0">${pptSolidFill(el.color || "#111827", alpha)}<a:latin typeface="Segoe UI Symbol"/><a:ea typeface="Segoe UI Symbol"/><a:cs typeface="Segoe UI Symbol"/></a:rPr><a:t>${xmlText(char)}</a:t></a:r></a:p></p:txBody></p:sp>`;
 }
 
 function pptShapeAssetXml(el, id) {
@@ -5323,8 +6121,8 @@ function pptShapeAssetXml(el, id) {
     else if (asset.radius === "999px" || clip.includes("circle") || clip.includes("ellipse")) prst = "ellipse";
     else prst = "roundRect", adj = `<a:avLst><a:gd name="adj" fmla="val 20000"/></a:avLst>`;
   }
-  const alpha = el.opacity && el.opacity < 1 ? `<a:alpha val="${Math.round(el.opacity * 100000)}"/>` : "";
-  const fill = el.fill === "transparent" ? `<a:noFill/>` : `<a:solidFill><a:srgbClr val="${pptColor(el.fill)}"${alpha}/></a:solidFill>`;
+  const alpha = el.opacity && el.opacity < 1 ? Math.round(el.opacity * 100000) : 0;
+  const fill = el.fill === "transparent" ? `<a:noFill/>` : pptSolidFill(el.fill, alpha);
   if (asset.kind === "line") {
     // horizontal line via thin rect
     return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="${xmlAttr(el.name || "Line")}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr>${pptXfrm(el)}<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>${fill}<a:ln><a:noFill/></a:ln></p:spPr><p:txBody><a:bodyPr/><a:lstStyle/><a:p/></p:txBody></p:sp>`;
@@ -5336,16 +6134,25 @@ function pptShapeAssetXml(el, id) {
   return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="${xmlAttr(el.name || "Shape")}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr>${pptXfrm(el)}<a:prstGeom prst="${prst}">${adj}<a:avLst/></a:prstGeom>${fill}<a:ln><a:noFill/></a:ln></p:spPr><p:txBody><a:bodyPr/><a:lstStyle/><a:p/></p:txBody></p:sp>`;
 }
 
-function pptImageXml(el, id) {
-  return `<p:pic><p:nvPicPr><p:cNvPr id="${id}" name="${xmlAttr(layerName(el))}"/><p:cNvPicPr><a:picLocks noChangeAspect="0"/></p:cNvPicPr><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:link="rIdImg${el.id}"/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr>${pptXfrm(el)}<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr></p:pic>`;
+function pptImageXml(el, id, mediaMap = new Map()) {
+  const src = el.type === "video" ? el.poster : el.src;
+  const media = mediaMap.get(src);
+  const blipRef = media ? `r:embed="rIdImg${el.id}"` : `r:link="rIdImg${el.id}"`;
+  return `<p:pic><p:nvPicPr><p:cNvPr id="${id}" name="${xmlAttr(layerName(el))}"/><p:cNvPicPr><a:picLocks noChangeAspect="0"/></p:cNvPicPr><p:nvPr/></p:nvPicPr><p:blipFill><a:blip ${blipRef}/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr>${pptXfrm(el)}<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr></p:pic>`;
 }
 
-function pptSlideRelsXml(index) {
+function pptSlideRelsXml(index, mediaMap = new Map()) {
   const page = state.pages[index - 1];
   const rels = [`<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>`];
   page.elements.forEach((el) => {
     const src = el.type === "video" ? el.poster : el.type === "image" ? el.src : "";
-    if (src) rels.push(`<Relationship Id="rIdImg${el.id}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="${xmlAttr(src)}" TargetMode="External"/>`);
+    if (!src) return;
+    const media = mediaMap.get(src);
+    if (media) {
+      rels.push(`<Relationship Id="rIdImg${el.id}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/${media.file}"/>`);
+    } else {
+      rels.push(`<Relationship Id="rIdImg${el.id}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="${xmlAttr(src)}" TargetMode="External"/>`);
+    }
   });
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${rels.join("")}</Relationships>`;
 }
@@ -5743,6 +6550,7 @@ function saveCurrentProject(kind = "Presentation", openProjects = true) {
   };
   state.projects = [snapshot, ...state.projects.filter((project) => project.name !== snapshot.name)].slice(0, 24);
   persistProjects();
+  if (state.cloudUser) syncToCloud();
   if (openProjects) state.tool = "projects";
   render();
 }

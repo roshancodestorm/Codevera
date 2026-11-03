@@ -68,13 +68,13 @@ router.post('/models/:id/duplicate', async (req, res) => {
     const m = rows[0];
     const newId = `${m.id}-copy-${Date.now()}`;
     await query(`
-      INSERT INTO models (id, name, provider, model_id, base_url, api_key, api_protocol, is_active, description, group_name,
+      INSERT INTO models (id, name, provider, model_id, base_url, api_key, api_protocol, speed, is_active, description, group_name,
         organization_id, project_id, headers, custom_params, temperature, top_p, top_k, max_tokens, context_window,
         timeout_ms, supports_streaming, supports_vision, supports_function_calling, supports_reasoning, supports_json,
         supports_embeddings, supports_image_generation, supports_speech, env_var_name)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,false,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,false,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29)
     `, [newId, `${m.name} (copy)`, m.provider, m.model_id, m.base_url, m.api_key, m.api_protocol || 'OpenAI',
-      m.description, m.group_name, m.organization_id, m.project_id, m.headers, m.custom_params, m.temperature,
+      m.speed ?? null, m.description, m.group_name, m.organization_id, m.project_id, m.headers, m.custom_params, m.temperature,
       m.top_p, m.top_k, m.max_tokens, m.context_window, m.timeout_ms, m.supports_streaming, m.supports_vision,
       m.supports_function_calling, m.supports_reasoning, m.supports_json, m.supports_embeddings,
       m.supports_image_generation, m.supports_speech, m.env_var_name]);
@@ -103,14 +103,14 @@ router.post('/models/import-config', async (req, res) => {
     for (const m of models) {
       const id = m.id || `imported-${Date.now()}-${imported}`;
       await query(`
-        INSERT INTO models (id, name, provider, model_id, base_url, api_key, api_protocol, is_active, description,
+        INSERT INTO models (id, name, provider, model_id, base_url, api_key, api_protocol, speed, is_active, description,
           max_tokens, context_window, timeout_ms, supports_streaming, supports_vision, supports_function_calling,
           supports_reasoning, supports_json, supports_embeddings, supports_image_generation, supports_speech)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,false,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,false,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
         ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, model_id=EXCLUDED.model_id, base_url=EXCLUDED.base_url,
-          api_key=EXCLUDED.api_key, provider=EXCLUDED.provider
+          api_key=EXCLUDED.api_key, provider=EXCLUDED.provider, speed=EXCLUDED.speed
       `, [id, m.name, m.provider || 'Custom', m.model_id || m.modelId, m.base_url || m.baseUrl || '', m.api_key || '',
-        m.api_protocol || 'OpenAI', m.description || null, m.max_tokens || 4096, m.context_window || 8192,
+        m.api_protocol || 'OpenAI', typeof m.speed === 'string' && m.speed ? m.speed : null, m.description || null, m.max_tokens || 4096, m.context_window || 8192,
         m.timeout_ms || 120000, m.supports_streaming !== false, !!m.supports_vision, !!m.supports_function_calling,
         !!m.supports_reasoning, m.supports_json !== false, !!m.supports_embeddings, !!m.supports_image_generation,
         !!m.supports_speech]);

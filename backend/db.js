@@ -34,7 +34,25 @@ export const initDb = async () => {
       name TEXT,
       subscription_status TEXT DEFAULT 'free',
       stripe_customer_id TEXT,
+      password_hash TEXT,
+      salt TEXT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS auth_sessions (
+      token TEXT PRIMARY KEY,
+      email TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS welcome_email_dispatches (
+      user_id TEXT PRIMARY KEY,
+      email TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      status TEXT NOT NULL,
+      provider_message_id TEXT,
+      sent_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+      error_message TEXT
     );
 
     CREATE TABLE IF NOT EXISTS models (
@@ -45,6 +63,7 @@ export const initDb = async () => {
       base_url TEXT NOT NULL,
       api_key TEXT,
       api_protocol TEXT DEFAULT 'OpenAI',
+      speed TEXT,
       is_active BOOLEAN DEFAULT false,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
@@ -128,6 +147,23 @@ export const initDb = async () => {
       error TEXT,
       timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
+
+    CREATE TABLE IF NOT EXISTS agent_runs (
+      id TEXT PRIMARY KEY,
+      workspace TEXT NOT NULL,
+      task TEXT NOT NULL,
+      status TEXT DEFAULT 'running',
+      phase TEXT DEFAULT 'planning',
+      plan JSONB,
+      arch JSONB,
+      generated_files JSONB,
+      summary TEXT,
+      error TEXT,
+      review NUMERIC,
+      failed BOOLEAN DEFAULT false,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
   `;
 
   const addColumnsQuery = `
@@ -152,6 +188,11 @@ export const initDb = async () => {
     ALTER TABLE models ADD COLUMN IF NOT EXISTS supports_image_generation BOOLEAN DEFAULT false;
     ALTER TABLE models ADD COLUMN IF NOT EXISTS supports_speech BOOLEAN DEFAULT false;
     ALTER TABLE models ADD COLUMN IF NOT EXISTS env_var_name TEXT;
+    ALTER TABLE models ADD COLUMN IF NOT EXISTS speed TEXT;
+    ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS review NUMERIC;
+    ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS failed BOOLEAN DEFAULT false;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS salt TEXT;
   `;
 
   try {

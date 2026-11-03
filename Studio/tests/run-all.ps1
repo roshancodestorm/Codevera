@@ -22,8 +22,12 @@ function Run-Suite([string]$name, [string]$file) {
 
 Run-Suite "sync-loop guard" "bundle-sync-test.cjs"
 Run-Suite "content sync" "bundle-content-test.cjs"
+Run-Suite "pro features" "pro-features-test.cjs"
 Run-Suite "collab 2-tab UI" "collab-2tab.cjs"
 Run-Suite "MP4 export" "mp4-test.cjs"
+Run-Suite "PPTX export (embed)" "pptx-embed-test.cjs"
+Run-Suite "cloud auth+share" "cloud-test.cjs"
+Run-Suite "UI e2e" "ui-e2e-test.cjs"
 
 Write-Host ""
 Write-Host ("RESULT: {0} passed, {1} failed" -f $pass, $fail.Count) -ForegroundColor $(if ($fail.Count -eq 0) { "Green" } else { "Red" })

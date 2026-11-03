@@ -21,10 +21,11 @@ Then visit `http://127.0.0.1:5173`.
 - Multi-page design workflow with add page, duplicate page, page switching, undo, and redo.
 - Drag, resize, duplicate, delete, layer ordering, magic layout, and selected-object controls.
 - Export the active page as `.png` or `.svg`, export all pages as `.ppt`, or save the document as `.json`.
+- AI deck pipeline (strategy → outline → per-slide writer) with live preview, AI image generation (local ComfyUI with automatic pollinations.ai cloud fallback), topic-relevant photo search (Unsplash key, Wikimedia Commons fallback, picsum last resort), single-slide regeneration, brand kits, and a local fallback generator.
+- PPTX export embeds slide images into the package (internal media parts with external-link fallback), plus hand-rolled OOXML for shapes, text, icons, and charts.
 
 ## Next Production Steps
 
-- Add a real PPTX exporter such as PptxGenJS on the client or a server-side export pipeline.
 - Add authentication, user projects, cloud uploads, media search APIs, and share links.
-- Add collaborative editing if multiple users need to work on one design.
 - Add server-side AI generation for slide outlines, layouts, copy, and image prompts.
+- Add remix/rebrand/persona one-click restyles and a template marketplace.

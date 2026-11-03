@@ -7,6 +7,7 @@ import fs from 'fs';
 import fsp from 'fs/promises';
 import path from 'path';
 import crypto from 'crypto';
+import { embedTexts, embedQuery } from './embedder.js';
 
 let INDEX_DIR = null;
 let WORKSPACES_ROOT = null;
@@ -17,8 +18,8 @@ let PROJECT_DIRS = null;
 const MAX_FILES = 3000;
 const MAX_FILE_SIZE = 512 * 1024;
 const PARSE_VERSION = 6;
-const EMBED_VERSION = 1;
-const SCAN_EXTS = new Set(['.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx', '.py', '.html', '.htm', '.css', '.json', '.md', '.env']);
+const EMBED_VERSION = 2; // 1 = hash pairs, 2 = dense nomic-embed (b64 float32)
+const SCAN_EXTS = new Set(['.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx', '.py', '.html', '.htm', '.css', '.json', '.md', '.env', '.kt', '.kts', '.java', '.xml', '.toml', '.gradle', '.properties']);
 
 const indexes = new Map();      // workspace -> index object (in memory)
 const watchers = new Map();     // workspace -> { dirs: Set, timers: Map, files: Map }
@@ -468,13 +469,24 @@ function chunkFile(rel, content, symbols) {
       endLine: Math.min(start + CHUNK_LINES, lines.length),
       labels: [...new Set(labels)].slice(0, 5),
       snippet: snippet.trim().slice(0, 120),
-      vec: embedTokens(text).pairs,
+      vec: null,
+      _text: text,
     });
   }
   return chunks;
 }
 
 function vecDot(a, b) {
+  if (!a || !b) return 0;
+  if (ArrayBuffer.isView(a) && ArrayBuffer.isView(b)) {
+    // dense float32 vectors
+    let sum = 0;
+    const n = Math.min(a.length, b.length);
+    for (let i = 0; i < n; i++) sum += a[i] * b[i];
+    return sum;
+  }
+  if (ArrayBuffer.isView(a) !== ArrayBuffer.isView(b)) return 0;
+  // sparse [dim, weight] pairs
   let sum = 0;
   let i = 0;
   let j = 0;
@@ -487,6 +499,26 @@ function vecDot(a, b) {
     else j++;
   }
   return sum;
+}
+
+function vecToB64(vec) {
+  return Buffer.from(new Float32Array(vec).buffer).toString('base64');
+}
+
+const denseCache = new Map(); // `${workspace}::${chunk.id}` -> Float32Array
+
+function chunkVec(workspace, c) {
+  if (typeof c.vec === 'string') {
+    const key = workspace + '::' + c.id;
+    let v = denseCache.get(key);
+    if (!v) {
+      const buf = Buffer.from(c.vec, 'base64');
+      v = new Float32Array(buf.buffer, buf.byteOffset, buf.byteLength / 4);
+      denseCache.set(key, v);
+    }
+    return v;
+  }
+  return c.vec || null;
 }
 
 function lineOf(content, index) {
@@ -622,7 +654,7 @@ export async function buildIndex(workspace, { force = false } = {}) {
     }
     const hash = crypto.createHash('sha1').update(content).digest('hex');
     const cached = idx._files[f.rel];
-    if (!force && cached && cached.hash === hash && cached.parseVersion === PARSE_VERSION) {
+    if (!force && cached && cached.hash === hash && cached.parseVersion === PARSE_VERSION && cached.embedVersion === EMBED_VERSION) {
       // reuse cached parse — copy its artifacts
       const cachedArtifacts = cached.symbols || [];
       const cachedRoutes = cached.routes || [];
@@ -660,6 +692,29 @@ export async function buildIndex(workspace, { force = false } = {}) {
   const known = new Set(Object.keys(fileRecords));
   for (const rel of Object.keys(idx._files)) {
     if (!known.has(rel)) delete idx._files[rel];
+  }
+
+  // neural embedding pass: batch-embed fresh chunks; fall back to hash pairs
+  // if the embedder is unavailable (embedVersion stays 1 → retried next run)
+  const toEmbed = newChunks.filter((c) => c.vec == null && c._text);
+  let denseUsed = false;
+  if (toEmbed.length) {
+    try {
+      const vecs = await embedTexts(toEmbed.map((c) => c._text));
+      if (vecs.every((v) => v != null)) {
+        toEmbed.forEach((c, i) => { c.vec = vecToB64(vecs[i]); });
+        denseUsed = true;
+      }
+    } catch {}
+    if (!denseUsed) {
+      for (const c of toEmbed) c.vec = embedTokens(c._text).pairs;
+    }
+  }
+  for (const c of newChunks) delete c._text;
+  for (const rel of Object.keys(idx._files)) {
+    const rec = idx._files[rel];
+    const cs = rec.chunks || [];
+    rec.embedVersion = cs.length && cs.every((c) => typeof c.vec === 'string') ? EMBED_VERSION : 1;
   }
 
   // resolve imports to workspace files → edges
@@ -713,6 +768,8 @@ export async function buildIndex(workspace, { force = false } = {}) {
   idx.edges = edges;
   idx.chunks = newChunks;
   idx.updatedAt = Date.now();
+  idx.version = PARSE_VERSION;
+  idx.embedVersion = EMBED_VERSION;
   recomputeStats(idx);
   indexes.set(workspace, idx);
   persist(workspace);
@@ -889,17 +946,25 @@ export function graphFor(workspace, node, { depth = 1, type = 'all' } = {}) {
   return { nodes: idx.symbols.slice(0, limit).map(nodeOut), edges: idx.edges.filter((e) => e.type !== 'dep' && edgeOk(e)).slice(0, 1200) };
 }
 
-// Semantic retrieval: rank chunks by cosine similarity over hashed n-gram embeddings
-export function semanticSearch(workspace, q, { limit = 8, filePrefix = null } = {}) {
+// Semantic retrieval: rank chunks by cosine similarity over neural embeddings
+// (nomic-embed via LM Studio), falling back to hashed n-gram embeddings.
+export async function semanticSearch(workspace, q, { limit = 8, filePrefix = null } = {}) {
   const idx = indexes.get(workspace);
   if (!idx || !Array.isArray(idx.chunks) || !idx.chunks.length) return [];
-  const qvec = embedTokens(String(q || ''));
-  if (!qvec.pairs.length) return [];
+  let qDense = null;
+  try {
+    qDense = await embedQuery(q);
+  } catch {}
+  const qSparse = embedTokens(String(q || ''));
+  const qvec = qDense || qSparse.pairs;
+  if (!qvec || (!ArrayBuffer.isView(qvec) && !qvec.length)) return [];
   const terms = new Set(String(q || '').toLowerCase().split(/[^a-z0-9_]+/).filter((t) => t.length >= 2));
   const scored = [];
   for (const c of idx.chunks) {
     if (filePrefix && !c.file.startsWith(filePrefix)) continue;
-    const s = vecDot(qvec.pairs, c.vec);
+    const cvec = chunkVec(workspace, c);
+    if (!cvec) continue;
+    const s = vecDot(qvec, cvec);
     if (s > 0.001) {
       let score = s;
       const pathLower = c.file.toLowerCase();
@@ -914,10 +979,10 @@ export function semanticSearch(workspace, q, { limit = 8, filePrefix = null } = 
 }
 
 // Stage 2 seed: ranked files + symbols for a query (used by context builder)
-export function contextFor(workspace, q, { limit = 8 } = {}) {
+export async function contextFor(workspace, q, { limit = 14 } = {}) {
   const idx = indexes.get(workspace);
   if (!idx) return { files: [], symbols: [] };
-  const sem = semanticSearch(workspace, q, { limit });
+  const sem = await semanticSearch(workspace, q, { limit });
   if (sem.length) {
     const files = [...new Set(sem.map((r) => r.file))].slice(0, limit);
     const symbols = [];

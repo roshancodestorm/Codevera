@@ -1,6 +1,8 @@
-﻿import express from 'express';
-import cors from 'cors';
 import dotenv from 'dotenv';
+dotenv.config();
+import express from 'express';
+import http from 'http';
+import cors from 'cors';
 import Stripe from 'stripe';
 import { initDb, query } from './db.js';
 import TelegramBot from 'node-telegram-bot-api';
@@ -10,7 +12,14 @@ const { Client, LocalAuth } = pkg;
 import qrcode from 'qrcode';
 import canvaRouter from './canva_oauth.js';
 import ideRouter from './ide.js';
+import { initExtensionHost } from './extensionHost.js';
 import modelHubRouter from './modelhub.js';
+import { registerMcpRoutes } from './mcp.js';
+import { setupCollabServer } from './collab.js';
+import { setupLspWsProxy } from './lsp.js';
+import { setupPtyWs } from './pty.js';
+import extensionsRouter from './extensions.js';
+import welcomeEmailRouter from './welcomeEmail.js';
 
 const activeBots = new Map();
 let whatsappClient = null;
@@ -467,11 +476,11 @@ process.on('unhandledRejection', async (reason) => {
   console.error("[GLOBAL UNHANDLED REJECTION]:", reason);
 });
 
-console.log("ðŸš€ Codevora Backend: Starting initialization...");
-dotenv.config();
-console.log("âœ… DOTENV Config Loaded.");
+console.log("🚀 Codevora Backend: Starting initialization...");
+console.log("✅ DOTENV Config Loaded.");
 initDb().then(() => {
   restoreAgents();
+  initExtensionHost().catch(() => console.log('[extensions] Host init skipped'));
 });
 console.log("ðŸ—„ï¸ PostgreSQL Initialization triggered.");
 console.log("Stripe Key Present:", !!process.env.STRIPE_SECRET_KEY);
@@ -600,10 +609,19 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
 
 // Regular Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '200mb' }));
 app.use('/api/canva', canvaRouter);
 app.use('/api/ide', ideRouter);
+app.use('/api/ide/extensions', extensionsRouter);
 app.use('/api', modelHubRouter);
+app.use('/api/auth', welcomeEmailRouter);
+
+// MCP (Model Context Protocol) — external tool servers for the agents
+{
+  const mcpRouter = express.Router();
+  registerMcpRoutes(mcpRouter);
+  app.use('/api/ide', mcpRouter);
+}
 
 // ðŸ’° Checkout Session Route
 app.post('/api/stripe/create-checkout', async (req, res) => {
@@ -635,13 +653,17 @@ app.get('/api/models', async (req, res) => {
   }
 });
 
+const SPEED_TIERS = ['Fast', 'High Fast', 'Medium', 'High'];
+// Optional UI metadata only — never affects routing or model capabilities.
+const sanitizeSpeed = (v) => (typeof v === 'string' && SPEED_TIERS.includes(v.trim()) ? v.trim() : null);
+
 app.post('/api/models', async (req, res) => {
-  const { id, name, provider, model_id, base_url, api_key, api_protocol, is_active } = req.body;
+  const { id, name, provider, model_id, base_url, api_key, api_protocol, is_active, speed } = req.body;
   try {
     await query(`
-      INSERT INTO models (id, name, provider, model_id, base_url, api_key, api_protocol, is_active)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-    `, [id, name, provider, model_id, base_url, api_key, api_protocol || 'OpenAI', is_active || false]);
+      INSERT INTO models (id, name, provider, model_id, base_url, api_key, api_protocol, speed, is_active)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    `, [id, name, provider, model_id, base_url, api_key, api_protocol || 'OpenAI', sanitizeSpeed(speed), is_active || false]);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -650,13 +672,13 @@ app.post('/api/models', async (req, res) => {
 
 app.put('/api/models/:id', async (req, res) => {
   const { id } = req.params;
-  const { name, provider, model_id, base_url, api_key, api_protocol } = req.body;
+  const { name, provider, model_id, base_url, api_key, api_protocol, speed } = req.body;
   try {
     await query(`
       UPDATE models 
-      SET name=$1, provider=$2, model_id=$3, base_url=$4, api_key=$5, api_protocol=$6
-      WHERE id=$7
-    `, [name, provider, model_id, base_url, api_key, api_protocol, id]);
+      SET name=$1, provider=$2, model_id=$3, base_url=$4, api_key=$5, api_protocol=$6, speed=$7
+      WHERE id=$8
+    `, [name, provider, model_id, base_url, api_key, api_protocol, sanitizeSpeed(speed), id]);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -964,14 +986,15 @@ app.post('/api/whatsapp/start', async (req, res) => {
       }),
       authTimeoutMs: 90000,
       qrMaxRetries: 8,
-      takeoverOnConflict: true,
+      takeoverOnConflict: false,
       takeoverTimeoutMs: 0,
       webVersionCache: {
-        type: 'remote',
-        remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
+        type: 'local',
       },
       puppeteer: {
         headless: true,
+        channel: 'chrome',
+        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
@@ -1270,6 +1293,7 @@ app.post('/api/automation/dispatch', async (req, res) => {
         return res.status(400).json({ error: 'Email credentials not configured in .env' });
       }
 
+      console.log(`📧 Using EMAIL_USER: ${process.env.EMAIL_USER}, PASS length: ${process.env.EMAIL_PASS?.length}`);
       const transporter = nodemailer.createTransport({
         service: 'gmail',
         auth: {
@@ -1474,8 +1498,38 @@ app.post('/api/projects', async (req, res) => {
   }
 });
 
+// ─── Global health / keepalive endpoints ─────────────────────────────────────
+// Responds to uptime monitoring pings (e.g. UptimeRobot, BetterUptime, Railway
+// health checks) to keep the instance "always on" in cloud deployments.
+app.get('/health', (_req, res) => {
+  const mem = process.memoryUsage();
+  res.json({
+    ok: true,
+    service: 'codestrom-backend',
+    uptime: Math.floor(process.uptime()),
+    rss: Math.floor(mem.rss / 1024 / 1024),
+    heapUsed: Math.floor(mem.heapUsed / 1024 / 1024),
+    pid: process.pid,
+    at: new Date().toISOString(),
+  });
+});
+
+app.post('/keepalive', (_req, res) => {
+  res.json({ ok: true, at: new Date().toISOString() });
+});
+
+// Tier 2 built-in PaaS mode: one dyno URL → live app URL. The router's
+// /api/ide/ landing redirects to /api/ide/preview/<latest workspace>.
+if (process.env.CODESTROM_HOSTED === '1') {
+  app.get('/', (_req, res) => res.redirect('/api/ide/'));
+}
+
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`ðŸš€ Codevora AI Backend running on port ${PORT}`);
+const httpServer = http.createServer(app);
+setupCollabServer(httpServer);
+setupLspWsProxy(httpServer);
+setupPtyWs(httpServer);
+httpServer.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Codevora AI Backend running on port ${PORT}`);
 });
 

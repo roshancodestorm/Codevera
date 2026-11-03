@@ -6,7 +6,7 @@ const WebSocket = require("ws");
 const CHROME = process.env.CHROME_PATH || "C:/Program Files/Google/Chrome/Application/chrome.exe";
 const APP = process.env.STUDIO_URL || "http://127.0.0.1:5174/";
 const TMP = path.join(__dirname, "tmp");
-const PROFILE = path.join(TMP, "profiles", "chrome-mp4-" + Date.now());
+const PROFILE = path.join(TMP, "profiles", "chrome-mp4-" + Date.now()).replace(/\\/g, "/");
 const DL = path.join(TMP, "mp4-downloads");
 const CDP_PORT = 9333;
 

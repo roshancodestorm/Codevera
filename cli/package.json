@@ -1,0 +1,13 @@
+{
+  "name": "codestrom-cli",
+  "version": "1.0.0",
+  "description": "Codestrom CLI",
+  "type": "module",
+  "bin": {
+    "codestrom": "./codestrom.js"
+  },
+  "dependencies": {
+    "commander": "^12.0.0",
+    "node-fetch": "^3.3.2"
+  }
+}

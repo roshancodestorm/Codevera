@@ -6,9 +6,10 @@ import fs from 'fs';
 import fsp from 'fs/promises';
 import path from 'path';
 import { ensureIndex, getIndex, semanticSearch } from './indexer.js';
+import { collectRules } from './rules.js';
 
 const MAX_FILE_SIZE = 512 * 1024;
-const MAX_REF_FILE = 8000;
+const MAX_REF_FILE = 12000;
 const MAX_REF_TOTAL = 60000;
 
 function safeJoin(base, rel) {
@@ -41,10 +42,10 @@ async function extractRegion(dir, rel, line, budget) {
     const content = await fsp.readFile(full, 'utf8');
     const lines = content.split('\n');
     let start = 0;
-    let end = Math.min(lines.length, 60);
+    let end = Math.min(lines.length, 90);
     if (line && line > 0) {
-      start = Math.max(0, line - 15);
-      end = Math.min(lines.length, line + 45);
+      start = Math.max(0, line - 20);
+      end = Math.min(lines.length, line + 70);
     }
     return lines.slice(start, end).join('\n').slice(0, budget);
   } catch {
@@ -52,7 +53,7 @@ async function extractRegion(dir, rel, line, budget) {
   }
 }
 
-export async function buildContext({ workspace, task, history = '', memory = '', refFiles = [], budget = 16000 }) {
+export async function buildContext({ workspace, task, history = '', memory = '', refFiles = [], refSymbols = [], budget = 24000 }) {
   let idx = null;
   try {
     idx = await ensureIndex(workspace);
@@ -62,12 +63,12 @@ export async function buildContext({ workspace, task, history = '', memory = '',
   // 1) semantic retrieval
   let hits = [];
   try {
-    hits = semanticSearch(workspace, task, { limit: 8 });
+    hits = await semanticSearch(workspace, task, { limit: 14 });
   } catch {}
   const hitFiles = hits.map((h) => h.file);
   const hitByFile = new Map(hits.map((h) => [h.file, h]));
   const files = new Set(idx ? idx.files.map((f) => f.path) : []);
-  const topFiles = [...new Set([...hitFiles, ...(idx ? idx.files.slice(0, 3).map((f) => f.path) : [])])].filter((f) => files.has(f)).slice(0, 6);
+  const topFiles = [...new Set([...hitFiles, ...(idx ? idx.files.slice(0, 3).map((f) => f.path) : [])])].filter((f) => files.has(f)).slice(0, 10);
 
   // 2) file regions with token budget
   const perFile = Math.max(2000, Math.floor((budget * 0.65) / Math.max(topFiles.length, 1)));
@@ -98,7 +99,7 @@ export async function buildContext({ workspace, task, history = '', memory = '',
       if (seen.has(key)) continue;
       seen.add(key);
       symbolRows.push(`${s.name} (${s.kind}) ${s.file}:${s.line} ${s.signature || ''}`.trim());
-      if (symbolRows.length >= 40) break;
+      if (symbolRows.length >= 60) break;
     }
   }
 
@@ -124,9 +125,36 @@ export async function buildContext({ workspace, task, history = '', memory = '',
   }
   const refText = refParts.length ? `\nUser-referenced files:\n${refParts.join('\n')}` : '';
 
-  // 6) assemble
+  // 5b) user-referenced symbols (function/class/component mentions)
+  const symParts = [];
+  const symBudget = 2000;
+  const symTotal = 14000;
+  for (const name of (Array.isArray(refSymbols) ? refSymbols : []).slice(0, 8)) {
+    const needle = String(name || '').replace(/^@/, '').trim();
+    if (!needle) continue;
+    const syms = idx && idx.symbols
+      ? idx.symbols.filter((s) => s.name === needle || s.name === `#${needle}`).concat(idx.symbols.filter((s) => s.name.includes(needle)).slice(0, 1))
+      : [];
+    const s = syms[0];
+    if (!s) continue;
+    const region = await extractRegion(dirPath, s.file, s.line, symBudget);
+    if (!region) continue;
+    symParts.push(`--- ${s.file}:${s.line} (${s.kind} ${s.name}${s.signature ? ' ' + s.signature : ''}) ---\n${region}`);
+    if (symParts.join('\n').length > symTotal) break;
+  }
+  const refSymText = symParts.length ? `\nUser-referenced symbols:\n${symParts.join('\n')}` : '';
+
+  // 6) project rules — `.codestrom/rules/**` + `global_rules.md` (+ legacy fallbacks)
+  let rulesText = '';
+  const scopeFiles = [...new Set([...topFiles, ...(Array.isArray(refFiles) ? refFiles : [])])];
+  try {
+    rulesText = (await collectRules(dirPath, { files: scopeFiles, cap: 8000 })).text;
+  } catch {}
+
+  // 7) assemble
   const parts = [];
   parts.push(`Workspace: ${workspace}`);
+  if (rulesText) parts.push(`\nProject rules:\n${rulesText}`);
   if (idx) {
     parts.push(`Index: ${idx.files.length} files, ${idx.symbols.length} symbols, ${idx.routes.length} routes, ${idx.deps.length} deps`);
   }
@@ -139,7 +167,7 @@ export async function buildContext({ workspace, task, history = '', memory = '',
   if (db.length) parts.push(`\nDatabase: ${db.map((d) => `${d.engine} ${d.kind} — ${d.file}`).join('; ')}`);
   if (memory) parts.push(`\nProject memory: ${memory.slice(0, 2500)}`);
   if (history) parts.push(`\nConversation history (most recent last):\n${history}`);
-  parts.push(`\nUser task: ${task}${refText}`);
+  parts.push(`\nUser task: ${task}${refSymText}${refText}`);
 
   const text = parts.join('\n').slice(0, budget + 8000);
   return {

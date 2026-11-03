@@ -9,7 +9,7 @@ function aiAgentContext(ctx) {
   return `TOPIC: "${ctx.topic}"
 TONE: ${ctx.tone || "Professional"}
 DECK TITLE: ${ctx.deckTitle || ctx.topic}
-${ctx.strategy ? `DESIGN STRATEGY (fixed, follow it):
+${ctx.sourceText ? `SOURCE MATERIAL (base your content STRICTLY on this — do not invent facts beyond it):\n"""\n${ctx.sourceText}\n"""\n` : ""}${ctx.strategy ? `DESIGN STRATEGY (fixed, follow it):
 - Topic category: ${ctx.strategy.topicCategory || "general"}
 - Tone voice: ${ctx.strategy.toneVoice || ""}
 - Key messages: ${(ctx.strategy.keyMessages || []).join("; ")}

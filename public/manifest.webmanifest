@@ -1,0 +1,33 @@
+{
+  "name": "Codestrom IDE",
+  "short_name": "Codestrom",
+  "description": "AI-powered full-stack IDE — build, run and deploy with intelligent agents",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0c0c10",
+  "theme_color": "#7c3aed",
+  "orientation": "landscape",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["developer", "productivity"],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Open IDE",
+      "url": "/",
+      "description": "Launch Codestrom AI IDE"
+    }
+  ]
+}

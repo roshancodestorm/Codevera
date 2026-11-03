@@ -2,7 +2,7 @@
 const WebSocket = require("ws");
 
 const CHROME = process.env.CHROME_PATH || "C:/Program Files/Google/Chrome/Application/chrome.exe";
-const PROFILE = require("path").join(__dirname, "tmp", "profiles", "chrome-collab-" + Date.now());
+const PROFILE = require("path").join(__dirname, "tmp", "profiles", "chrome-collab-" + Date.now()).replace(/\\/g, "/");
 const CDP_PORT = 9335;
 const APP = process.env.STUDIO_URL || "http://127.0.0.1:5174/";
 

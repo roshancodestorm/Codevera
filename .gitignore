@@ -1,28 +1,134 @@
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
 
-node_modules
-dist
-dist-ssr
-*.local
+# Dependencies
+node_modules/
+**/node_modules/
+vendor/
 
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+# Build output
+dist/
+**/dist/
+build/
+**/build/
+out/
+coverage/
 
+# Runtime and temporary files
+.ide/
+.runtime-temp/
+tmp/
+temp/
+scratch/
 workspaces/
+vscode-exports/
 
+# Logs
+*.log
+*.out
+*.err
+vite*.txt
+server*.txt
+backend_runner*.txt
+hs_err_pid*.log
+
+# Authentication and sessions
+.wwebjs_auth/
+.wwebjs_cache/
+**/.wwebjs_auth/
+**/.wwebjs_cache/
+backend/users.json
+backend/sessions.json
+backend/projects.json
+backend/local-workspaces.json
+
+# Local configuration / possible secrets
+backend/ai-settings.json
 backend/models_config.json
+backend/mcp-servers.json
+
+# Large downloaded tools and models
+ComfyUI/
+gradle-*/
+*.zip
+*.7z
+*.rar
+
+# OS and editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Local database
+*.db
+*.sqlite
+*.sqlite3
+
+
+# Backend temporary/debug files
+backend/_*.cjs
+backend/_*.txt
+backend/*.log
+backend/server.js.bak*
+backend/delivery/
+
+# Root temporary files
+*.log
+port7860.txt
+py_test.txt
+test.txt
+tsc
+codestrom@1.0.0
+comfy_startup.log
+sd_run_log.txt
+
+# Local development output
+vite_run.txt
+output.log
+backend_out.txt
+backend_err.txt
+# Studio local user data
+Studio/data/
+
+# Development logs
+backend/install_out.txt
+backend/runner_out.txt
+backend_status.txt
+dev_run.txt
+dev_run_2.txt
+dev_run_3.txt
+grok_models.txt
+grok_out.txt
+grok_out_2.txt
+port_status.txt
+vite_run.txt
+vite_run_2.txt
+Studio/data/
+# Python generated files
+__pycache__/
+*.pyc
+*.pyo
+
+# Studio local user data
+Studio/data/
+
+# Friday local environment
+Hellomj/**/__pycache__/
+# Logs, backups and generated files
+*_out.txt
+*_err.txt
+*_status.txt
+*_run*.txt
+*.bak
+*.bak-*
+*.pyc
+__pycache__/
+
+# Local databases and user data
+Studio/data/

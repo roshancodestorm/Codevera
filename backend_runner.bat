@@ -1,2 +1,3 @@
 @echo off
-node e:\Projects\Codestrom\backend\server.js > e:\Projects\Codestrom\backend\runner_out.txt 2>&1
+cd /d "%~dp0"
+node server.js > "%~dp0runner_out.txt" 2>&1

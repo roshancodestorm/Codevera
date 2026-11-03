@@ -1,0 +1,4 @@
+aiohttp==3.9.1
+aiohttp-cors==0.7.0
+websocket-client==1.7.0
+Pillow==10.2.0

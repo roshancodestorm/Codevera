@@ -34,6 +34,47 @@ function nearestBrandColor(hex, lockedColors) {
   return best;
 }
 
+// ── Preset restyles: role-based color remapping ────────────────────
+// Each preset defines six role colors. Backgrounds and elements are
+// remapped by luminance/role instead of nearest-color, so text stays
+// readable and accents stay accent-like across slides.
+const RESTYLE_PRESETS = [
+  { id: "modern", label: "Modern Indigo", ink: "#1e293b", paper: "#ffffff", surface: "#f1f5f9", accent: "#6366f1", pop: "#22d3ee", muted: "#64748b", dark: false, darkBg: "#0f172a" },
+  { id: "bold", label: "Bold Coral", ink: "#1c1917", paper: "#ffffff", surface: "#faf5f0", accent: "#ff4d4d", pop: "#ffb020", muted: "#78716c", dark: false, darkBg: "#1c1917" },
+  { id: "minimal", label: "Minimal Mono", ink: "#18181b", paper: "#fafafa", surface: "#f4f4f5", accent: "#18181b", pop: "#52525b", muted: "#a1a1aa", dark: false, darkBg: "#18181b" },
+  { id: "luxury", label: "Luxury Gold", ink: "#17130c", paper: "#fdf9ef", surface: "#f4ead2", accent: "#c9a227", pop: "#8a6d3b", muted: "#8a7f66", dark: false, darkBg: "#17130c" },
+  { id: "nature", label: "Nature Green", ink: "#14532d", paper: "#f4fbf3", surface: "#e6f3e4", accent: "#16a34a", pop: "#84cc16", muted: "#4d7c4f", dark: false, darkBg: "#052e16" },
+  { id: "tech", label: "Dark Tech", ink: "#e2e8f0", paper: "#0b1220", surface: "#111a2e", accent: "#38bdf8", pop: "#a78bfa", muted: "#8ea3bf", dark: true, darkBg: "#070d1a" },
+];
+
+function restyleDeckToPreset(pages, preset) {
+  const cloned = JSON.parse(JSON.stringify(pages));
+  cloned.forEach((page) => {
+    if (!page || !Array.isArray(page.elements)) return;
+    const bgLum = relativeLuminance(page.background);
+    page.background = preset.dark
+      ? (bgLum < 0.4 ? preset.darkBg : preset.surface)
+      : (bgLum > 0.6 ? preset.paper : preset.surface);
+    page.elements.forEach((el) => {
+      if (!el) return;
+      if (el.type === "image" || el.type === "video") return;
+      const lum = relativeLuminance(el.color || el.fill);
+      if (el.type === "text") {
+        if (lum > 0.75) el.color = preset.dark ? el.color : preset.surface;
+        else if (lum < 0.3) el.color = preset.dark ? preset.ink : preset.ink;
+        else el.color = preset.ink;
+      } else if (el.type === "icon") {
+        el.color = lum > 0.75 ? preset.pop : preset.accent;
+      } else if (el.fill) {
+        if (lum > 0.85) el.fill = preset.surface;
+        else if (lum < 0.35) el.fill = preset.accent;
+        else el.fill = preset.pop;
+      }
+    });
+  });
+  return cloned;
+}
+
 function brandPaletteFromKit(brandKit) {
   const c = (brandKit && brandKit.lockedColors) || {};
   const paper = c.background || "#ffffff";
