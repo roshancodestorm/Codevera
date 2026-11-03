@@ -1,6 +1,7 @@
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
-<img width="1366" height="728" alt="image" src="https://github.com/user-attachments/assets/4fc73d41-bdc8-42b6-b326-533da647cabe" />
+<img width="1158" height="465" alt="image" src="https://github.com/user-attachments/assets/ef9966fa-e9a4-4ef3-9646-219de216dd07" />
+
 
 Currently, two official plugins are available:
 
@@ -42,7 +43,8 @@ export default defineConfig([
   },
 ])
 ```
-<img width="1190" height="597" alt="image" src="https://github.com/user-attachments/assets/dda90035-6b52-4b2c-89b6-d62a4107854e" />
+<img width="1243" height="548" alt="image" src="https://github.com/user-attachments/assets/bc0c54fb-3b43-4cf2-8a88-5045b35337a7" />
+
 
 You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
 
@@ -52,4 +54,6 @@ import reactX from 'eslint-plugin-react-x'
 import reactDom from 'eslint-plugin-react-dom'
 
 <img width="1190" height="638" alt="image" src="https://github.com/user-attachments/assets/12af675f-23d3-45e5-a0b8-bcdfdf032551" />
+<img width="1189" height="592" alt="image" src="https://github.com/user-attachments/assets/70f9c99d-b904-436c-8901-517c6062650f" />
 
+<img width="1195" height="402" alt="image" src="https://github.com/user-attachments/assets/19dfe940-5345-446f-91d5-69e10fc442d1" />
